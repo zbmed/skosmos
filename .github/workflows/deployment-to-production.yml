@@ -1,6 +1,8 @@
 name: Deployment to production
 concurrency: production
 on:
+  push:
+    branches: ['zbmed-dev']
   workflow_dispatch:
     inputs:
       image_name:
