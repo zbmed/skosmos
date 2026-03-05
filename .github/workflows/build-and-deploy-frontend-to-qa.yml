@@ -66,9 +66,10 @@ jobs:
            helmv3 repo update
            helmv3 upgrade semlookp-skosmos-ui \
            --install \
+           --namespace='zbmed-ts-nfdi4cat' \
            --set-json='frontend.image="ghcr.io/${{ github.repository }}:${{ github.event.pull_request.head.sha || github.sha }}"' \
-           --set-json='ingress.dns="semlookp-skosmos.qa.km.k8s.zbmed.de"' \
-           --set-json='backend.releaseName="semlookp-skosmos"' \
+           --set-json='ingress.dns="ts-nfdi4cat.qa.km.k8s.zbmed.de"' \
+           --set-json='backend.releaseName="zbmed-ts-nfdi4cat"' \
            --set-json='ingress.path="/skosmos(/|$)(.*)"' \
            --set-json='ingress.pathType="ImplementationSpecific"' \
            --set-json='ingress.appRoot="/skosmos"' \
