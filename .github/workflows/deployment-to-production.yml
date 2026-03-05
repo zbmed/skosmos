@@ -25,12 +25,12 @@ jobs:
           command: |
             helmv3 repo add skosmos-deployment https://zbmed.github.io/skosmos-deployment/
             helmv3 repo update
-            helmv3 upgrade semlookp-skosmos-ui \
+            helmv3 upgrade zbmed-ts-nfdi4cat-ui \
             --install \
             --namespace='zbmed-ts-nfdi4cat' \
             --set-json='frontend.image="ghcr.io/${{ github.repository }}:${{ github.event.pull_request.head.sha || github.sha }}"' \
             --set-json='ingress.dns="semanticlookup.zbmed.de"' \
-            --set-json='backend.releaseName="semlookp-skosmos"' \
+            --set-json='backend.releaseName="zbmed-ts-nfdi4cat"' \
             --set-json='ingress.path="/skosmos(/|$)(.*)"' \
             --set-json='ingress.pathType="ImplementationSpecific"' \
             --set-json='ingress.appRoot="/skosmos"' \

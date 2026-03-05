@@ -64,7 +64,7 @@ jobs:
            kubectl get nodes
            helmv3 repo add skosmos-deployment https://zbmed.github.io/skosmos-deployment/
            helmv3 repo update
-           helmv3 upgrade semlookp-skosmos-ui \
+           helmv3 upgrade zbmed-ts-nfdi4cat-ui \
            --install \
            --namespace='zbmed-ts-nfdi4cat' \
            --set-json='ui.image="ghcr.io/${{ github.repository }}:${{ github.event.pull_request.head.sha || github.sha }}"' \
