@@ -32,6 +32,8 @@ function startGroupsApp () {
       if (document.querySelector('#groups > a').classList.contains('active')) {
         this.loadGroups()
       }
+
+      this.setListStyle()
     },
     beforeUpdate () {
       this.setListStyle()
@@ -45,13 +47,12 @@ function startGroupsApp () {
       },
       loadGroups () {
         this.loadingGroups = true
-        fetch('rest/v1/' + window.SKOSMOS.vocab + '/groups/?lang=' + window.SKOSMOS.content_lang)
+        const params = new URLSearchParams({ lang: window.SKOSMOS.content_lang })
+        fetch(`rest/v1/${window.SKOSMOS.vocab}/groups/?${params}`)
           .then(data => {
             return data.json()
           })
           .then(data => {
-            console.log('groups data', data)
-
             this.groups = []
 
             const groups = data.groups
@@ -89,12 +90,15 @@ function startGroupsApp () {
 
               // Only load members if selected group has members
               if (uriMap.get(this.selectedGroup).hasMembers) {
-                fetch('rest/v1/' + window.SKOSMOS.vocab + '/groupMembers/?lang=' + window.SKOSMOS.content_lang + '&uri=' + this.selectedGroup)
+                const params = new URLSearchParams({
+                  lang: window.SKOSMOS.content_lang,
+                  uri: this.selectedGroup
+                })
+                fetch(`rest/v1/${window.SKOSMOS.vocab}/groupMembers/?${params}`)
                   .then(data => {
                     return data.json()
                   })
                   .then(data => {
-                    console.log('members data', data)
                     // Filter out existing groups from members list and add the correct properties
                     const members = data.members
                       .filter(m => !uriMap.has(m.uri))
@@ -107,7 +111,6 @@ function startGroupsApp () {
 
                     this.groups = result
                     this.loadingGroups = false
-                    console.log('groups', this.groups)
                   })
               } else {
                 // If selected group has no members, set isOpen for the group and its parents
@@ -115,13 +118,11 @@ function startGroupsApp () {
 
                 this.groups = result
                 this.loadingGroups = false
-                console.log('groups', this.groups)
               }
             } else {
               // If we are on vocab home page, simply set groups to result
               this.groups = result
               this.loadingGroups = false
-              console.log('groups', this.groups)
             }
           })
       },
@@ -154,7 +155,7 @@ function startGroupsApp () {
       },
       setListStyle () {
         const height = document.getElementById('sidebar-tabs').clientHeight
-        const width = document.getElementById('sidebar-tabs').clientWidth - 1
+        const width = document.getElementById('sidebar-tabs').getBoundingClientRect().width
         this.listStyle = {
           height: 'calc( 100% - ' + height + 'px )',
           width: width + 'px'
@@ -164,17 +165,19 @@ function startGroupsApp () {
         // Load children only if group has children and they have not been loaded yet
         if (group.childGroups.length === 0 && group.hasMembers) {
           this.loadingChildren.push(group)
-          fetch('rest/v1/' + window.SKOSMOS.vocab + '/groupMembers/?lang=' + window.SKOSMOS.content_lang + '&uri=' + group.uri)
+          const params = new URLSearchParams({
+            lang: window.SKOSMOS.content_lang,
+            uri: group.uri
+          })
+          fetch(`rest/v1/${window.SKOSMOS.vocab}/groupMembers/?${params}`)
             .then(data => {
               return data.json()
             })
             .then(data => {
-              console.log('data', data)
               for (const m of data.members) {
                 group.childGroups.push({ ...m, childGroups: [], isOpen: false, isGroup: false })
               }
               this.loadingChildren = this.loadingChildren.filter(x => x !== group)
-              console.log('groups', this.groups)
             })
         }
       }
@@ -289,13 +292,12 @@ function startGroupsApp () {
             <i class="fa-solid fa-spinner fa-spin-pulse"></i>
           </template>
           <template v-else>
-            <img v-if="group.isOpen" alt="" src="resource/pics/black-lower-right-triangle.png">
-            <img v-else alt="" src="resource/pics/lower-right-triangle.png">
+            <img v-if="group.isOpen" alt="" src="resource/pics/black-lower-right-triangle.svg">
+            <img v-else alt="" src="resource/pics/lower-right-triangle.svg">
           </template>
         </button>
         <span class="concept-label" :class="{ 'last': isLast }">
-          <i v-if="group.isGroup" class="property-hover fa-solid fa-layer-group"></i>
-          <a :class="{ 'selected': selectedGroup === group.uri }"
+          <a :class="{ 'selected': selectedGroup === group.uri, 'group': group.isGroup }"
             :href="getConceptURL(group.uri)"
             @click="handleClickGroupEvent($event, group)"
             :aria-label="goToTheConceptPageAriaMessage"
@@ -323,7 +325,9 @@ function startGroupsApp () {
     `
   })
 
-  tabGroupsApp.mount('#tab-groups')
+  if (document.getElementById('tab-groups')) {
+    tabGroupsApp.mount('#tab-groups')
+  }
 }
 
 onTranslationReady(startGroupsApp)

@@ -1,5 +1,3 @@
-version: '3.7'
-
 services:
   fuseki:
     extends:
@@ -15,7 +13,11 @@ services:
       service: skosmos
     volumes:
       - type: bind
-        source: testconfig.ttl
-        target: /var/www/html/config.ttl
+        source: plugins
+        target: /var/www/html/plugins
+      - type: bind
+        source: custom-templates
+        target: /var/www/html/custom-templates
     environment:
       SKOSMOS_SPARQL_ENDPOINT: http://fuseki-cache:80/skosmos/sparql
+      SKOSMOS_CONFIG_NAME: tests/testconfig.ttl

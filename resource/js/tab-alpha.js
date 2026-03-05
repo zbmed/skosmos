@@ -54,7 +54,8 @@ function startAlphaApp () {
         this.loadingLetters = true
         // Remove scrolling event listener while letters are loaded
         this.$refs.tabAlpha.$refs.list.removeEventListener('scroll', this.handleScrollEvent)
-        fetch('rest/v1/' + window.SKOSMOS.vocab + '/index/?lang=' + window.SKOSMOS.content_lang)
+        const params = new URLSearchParams({ lang: window.SKOSMOS.content_lang })
+        fetch(`rest/v1/${window.SKOSMOS.vocab}/index/?${params}`)
           .then(data => {
             return data.json()
           })
@@ -70,7 +71,11 @@ function startAlphaApp () {
         this.currentOffset = 0
         // Remove scrolling event listener while concepts are loaded
         this.$refs.tabAlpha.$refs.list.removeEventListener('scroll', this.handleScrollEvent)
-        const url = 'rest/v1/' + window.SKOSMOS.vocab + '/index/' + letter + '?lang=' + window.SKOSMOS.content_lang + '&limit=250'
+        const params = new URLSearchParams({
+          lang: window.SKOSMOS.content_lang,
+          limit: '250'
+        })
+        const url = `rest/v1/${window.SKOSMOS.vocab}/index/${letter}?${params}`
         fetchWithAbort(url, 'alpha')
           .then(data => {
             return data.json()
@@ -84,9 +89,7 @@ function startAlphaApp () {
             this.$refs.tabAlpha.$refs.list.addEventListener('scroll', this.handleScrollEvent)
           })
           .catch(error => {
-            if (error.name === 'AbortError') {
-              console.log('Fetch aborted for letter ' + letter)
-            } else {
+            if (error.name !== 'AbortError') {
               throw error
             }
           })
@@ -95,7 +98,12 @@ function startAlphaApp () {
         this.loadingMoreConcepts = true
         // Remove scrolling event listener while new concepts are loaded
         this.$refs.tabAlpha.$refs.list.removeEventListener('scroll', this.handleScrollEvent)
-        const url = 'rest/v1/' + window.SKOSMOS.vocab + '/index/' + this.selectedLetter + '?lang=' + window.SKOSMOS.content_lang + '&limit=250&offset=' + this.currentOffset
+        const params = new URLSearchParams({
+          lang: window.SKOSMOS.content_lang,
+          limit: '250',
+          offset: this.currentOffset
+        })
+        const url = `rest/v1/${window.SKOSMOS.vocab}/index/${this.selectedLetter}?${params}`
         fetchWithAbort(url, 'alpha')
           .then(data => {
             return data.json()
@@ -110,9 +118,7 @@ function startAlphaApp () {
             }
           })
           .catch(error => {
-            if (error.name === 'AbortError') {
-              console.log('Fetch aborted for letter ' + this.selectedLetter + ' and offset ' + this.currentOffset)
-            } else {
+            if (error.name !== 'AbortError') {
               throw error
             }
           })
@@ -127,12 +133,11 @@ function startAlphaApp () {
         const pagination = this.$refs.tabAlpha.$refs.pagination
         const sidebarTabs = document.getElementById('sidebar-tabs')
 
-        // get height and width of pagination and sidebar tabs elements if they exist
-        const height = pagination && pagination.clientHeight + sidebarTabs.clientHeight
-        const width = pagination && pagination.clientWidth - 1
+        const height = pagination ? pagination.clientHeight + sidebarTabs.clientHeight : sidebarTabs.clientHeight
+        const width = sidebarTabs.getBoundingClientRect().width
 
         this.listStyle = {
-          height: 'calc(100% - ' + height + 'px )',
+          height: 'calc( 100% - ' + height + 'px )',
           width: width + 'px'
         }
       }
@@ -198,12 +203,7 @@ function startAlphaApp () {
       }
     },
     template: `
-      <template v-if="loadingLetters">
-        <div class="loading-message">
-          {{ this.loadingMessage }} <i class="fa-solid fa-spinner fa-spin-pulse"></i>
-        </div>
-      </template>
-      <template v-else>
+      <template v-if="!loadingLetters">
         <ul class="pagination" v-if="indexLetters.length !== 0" ref="pagination">
           <li v-for="letter in indexLetters" class="page-item">
             <a class="page-link" href="#" @click="loadConcepts($event, letter)">{{ letter }}</a>
@@ -212,7 +212,7 @@ function startAlphaApp () {
       </template>
       
       <div class="sidebar-list" :style="listStyle" ref="list">
-        <template v-if="loadingConcepts">
+        <template v-if="loadingConcepts || loadingLetters">
           <div>
             {{ this.loadingMessage }} <i class="fa-solid fa-spinner fa-spin-pulse"></i>
           </div>
@@ -242,7 +242,9 @@ function startAlphaApp () {
     `
   })
 
-  tabAlphaApp.mount('#tab-alphabetical')
+  if (document.getElementById('tab-alphabetical')) {
+    tabAlphaApp.mount('#tab-alphabetical')
+  }
 }
 
 onTranslationReady(startAlphaApp)

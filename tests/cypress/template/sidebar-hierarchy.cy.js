@@ -77,6 +77,62 @@ describe('Hierarchy', () => {
     // Check that other concepts are loaded
     cy.get('#hierarchy-list li ul').first().children().should('have.length', 9)
   })
+  it('Loads hierarchy after opening concept page in vocab without top concepts', () => {
+    // Go to test vocab home page
+    cy.visit('/test-hierarchy-without-top-concepts/en/')
+    // Check that hierarchy tab is disabled
+    cy.get('#hierarchy .nav-link').should('have.class', 'disabled')
+    // Change letter to C in alphabetical view
+    cy.get("#tab-alphabetical .pagination").contains('a', 'C').click()
+    // Click on "Cuckoo" in alphabetical index
+    cy.get('#tab-alphabetical .sidebar-list li a').last().click()
+    // Check that new concept page has been loaded
+    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'Cuckoo')
+    // Check that hierarchy tab is not disabled
+    cy.get('#hierarchy .nav-link').should('not.have.class', 'disabled')
+    // Click hierarchy tab open
+    cy.get('#hierarchy').click()
+    // Check that selected element is "Cuckoo"
+    cy.get('#hierarchy-list .selected').should('have.length', 1).invoke('text').should('contain', 'Cuckoo')
+    // Check that "Cuckoo" has 1 child "European cuckoo"
+    cy.get('#hierarchy-list li:has(.selected)').last().find('ul').should('have.length', 1).invoke('text').should('contain', 'European cuckoo')
+    // Check that hierarchy includes correct top concept
+    cy.get('#hierarchy-list li a').first().invoke('text').should('contain', 'Birds')
+    // Check that other concepts are loaded
+    cy.get('#hierarchy-list li ul').first().children().should('have.length', 9)
+  })
+  it('Loads hierarchy in vocab with multiple schemes', () => {
+    // Go to test vocab home page
+    cy.visit('/multiple-schemes/en/')
+    // Check that hierarchy tab is available and click it open
+    cy.get('#hierarchy').should('not.have.class', 'disabled').click()
+    // Check that hierarchy includes correct top concept
+    cy.get('#hierarchy-list li').should('have.length', 3).first().invoke('text').should('contain', 'Concept Scheme 1')
+    // Click hierarchy open button of first concept scheme
+    cy.get('#hierarchy-list li button').first().click({force: true})
+    // Check that children are loaded in
+    cy.get('#hierarchy-list li ul').first().children().should('have.length', 1)
+    cy.get('#hierarchy-list li ul').first().children().first().invoke('text').should('contain', 'concept 1')
+    
+    // Go back to alphabetical index and open a "concept 1" page
+    cy.get('#alphabetical').click()
+    cy.get('#tab-alphabetical .sidebar-list li a').first().click()
+    // Check that new concept page has been loaded
+    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'concept 1')
+    // Click hierarchy tab open again
+    cy.get('#hierarchy').click()
+    // Check that "concept 1" is selected
+    cy.get('#hierarchy-list .selected').invoke('text').should('contain', 'concept 1')
+    
+    // Go to test "Concept Scheme 1" concept page
+    cy.visit('/multiple-schemes/en/page/cs1')
+    // Check that "Concept Scheme 1" is selected
+    cy.get('#hierarchy-list .selected').invoke('text').should('contain', 'Concept Scheme 1')
+    // Check that children are loaded in
+    cy.get('#hierarchy-list li:has(.selected) ul').first().children().should('have.length', 1)
+    cy.get('#hierarchy-list li:has(.selected) ul').first().children().first().invoke('text').should('contain', 'concept 1')
+
+  })
   it('Scrolls to selected concept on load', () => {
     // Go to "ages (periods of time)" YSO concept page
     cy.visit('/yso/en/page/p4623')

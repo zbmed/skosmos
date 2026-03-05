@@ -50,13 +50,15 @@ function startChangesApp () {
         this.currentOffset = 0
         // Remove scrolling event listener while changes are loaded
         this.$refs.tabChanges.$refs.list.removeEventListener('scroll', this.handleScrollEvent)
-        fetch('rest/v1/' + window.SKOSMOS.vocab + '/new?lang=' + window.SKOSMOS.content_lang + '&limit=200')
+        const params = new URLSearchParams({
+          lang: window.SKOSMOS.content_lang,
+          limit: '200'
+        })
+        fetch(`rest/v1/${window.SKOSMOS.vocab}/new?${params}`)
           .then(data => {
             return data.json()
           })
           .then(data => {
-            console.log('data', data)
-
             // Group concepts by month and year
             // Using a map instead of an object because maps maintain original insertion order
             const changesByDate = new Map()
@@ -78,20 +80,22 @@ function startChangesApp () {
             this.currentOffset = 200
             // Add scrolling event listener back after changes are loaded
             this.$refs.tabChanges.$refs.list.addEventListener('scroll', this.handleScrollEvent)
-            console.log('changes', this.changedConcepts)
           })
       },
       loadMoreChanges () {
         this.loadingMoreConcepts = true
         // Remove scrolling event listener while new changes are loaded
         this.$refs.tabChanges.$refs.list.removeEventListener('scroll', this.handleScrollEvent)
-        fetch('rest/v1/' + window.SKOSMOS.vocab + '/new?lang=' + window.SKOSMOS.content_lang + '&limit=200&offset=' + this.currentOffset)
+        const params = new URLSearchParams({
+          lang: window.SKOSMOS.content_lang,
+          limit: '200',
+          offset: this.currentOffset
+        })
+        fetch(`rest/v1/${window.SKOSMOS.vocab}/new?${params}`)
           .then(data => {
             return data.json()
           })
           .then(data => {
-            console.log('data', data)
-
             // Group concepts by month and year
             for (const concept of data.changeList) {
               const date = new Date(concept.date)
@@ -112,7 +116,6 @@ function startChangesApp () {
             if (data.changeList.length > 0) {
               this.$refs.tabChanges.$refs.list.addEventListener('scroll', this.handleScrollEvent)
             }
-            console.log('changes', this.changedConcepts)
           })
       },
       handleScrollEvent () {
@@ -123,7 +126,7 @@ function startChangesApp () {
       },
       setListStyle () {
         const height = document.getElementById('sidebar-tabs').clientHeight
-        const width = document.getElementById('sidebar-tabs').clientWidth - 1
+        const width = document.getElementById('sidebar-tabs').getBoundingClientRect().width
         this.listStyle = {
           height: 'calc( 100% - ' + height + 'px )',
           width: width + 'px'
@@ -131,7 +134,7 @@ function startChangesApp () {
       }
     },
     template: `
-      <div v-click-tab-changes="handleClickChangesEvent">
+      <div v-click-tab-changes="handleClickChangesEvent" v-resize-window="setListStyle">
         <tab-changes
           :changed-concepts="changedConcepts"
           :selected-concept="selectedConcept"
@@ -157,6 +160,19 @@ function startChangesApp () {
     },
     unmounted: el => {
       document.querySelector('#changes').removeEventListener('click', el.clickTabEvent)
+    }
+  })
+
+  /* Custom directive used to add an event listener on resizing the window */
+  tabChangesApp.directive('resize-window', {
+    beforeMount: (el, binding) => {
+      el.resizeWindowEvent = event => {
+        binding.value() // calling the method given as the attribute value (setListStyle)
+      }
+      window.addEventListener('resize', el.resizeWindowEvent) // registering an event listener on resizing the window
+    },
+    unmounted: el => {
+      window.removeEventListener('resize', el.resizeWindowEvent)
     }
   })
 
@@ -223,7 +239,9 @@ function startChangesApp () {
     `
   })
 
-  tabChangesApp.mount('#tab-changes')
+  if (document.getElementById('tab-changes')) {
+    tabChangesApp.mount('#tab-changes')
+  }
 }
 
 onTranslationReady(startChangesApp)

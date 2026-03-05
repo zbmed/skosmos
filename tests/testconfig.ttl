@@ -30,7 +30,7 @@
     skosmos:sparqlCollationEnabled true ;
     # HTTP client configuration
     skosmos:sparqlTimeout 10 ;
-    skosmos:httpTimeout 8 ;
+    skosmos:httpTimeout 20 ;
     # customize the service name
     skosmos:serviceName "Skosmos being tested" ;
     skosmos:serviceNameLong "Skosmos being tested, long title"@en, "Skosmos-long" ;
@@ -48,6 +48,8 @@
     skosmos:searchResultsSize 5 ;
     # how many items (maximum) to retrieve in transitive property queries
     skosmos:transitiveLimit 100 ;
+    # how many items (maximum) to retrieve in rdf lists
+    skosmos:rdfListItemsLimit 16 ;
     # whether or not to log caught exceptions
     skosmos:logCaughtExceptions true ;
     # set to TRUE to enable logging into browser console
@@ -66,10 +68,12 @@
     skosmos:feedbackEnvelopeSender "skosmos tests" ;
     # whether to display the ui language selection as a dropdown (useful for cases where there are more than 3 languages) 
     skosmos:uiLanguageDropdown true ;
+    # whether to use development build of Vue
+    skosmos:uiDevMode true ;
     # whether to enable the spam honey pot or not, enabled by default
-    skosmos:uiHoneypotEnabled false ;
+    skosmos:feedbackHoneypotEnabled false ;
     # default time a user must wait before submitting a form
-    skosmos:uiHoneypotTime 2 ;
+    skosmos:feedbackHoneypotTime 2 ;
     # plugins to activate for the whole installation (including all vocabularies)
     skosmos:globalPlugins ("alpha" "Bravo" "charlie") .
 
@@ -134,7 +138,6 @@
     skosmos:marcSourceCode "yso/fin"@fi, "yso/swe"@sv, "yso/eng"@en;
     skosmos:language "fi", "sv", "se", "en";
     skosmos:showTopConcepts "true";
-    skosmos:showChangeList "true" ;
     skosmos:showDeprecatedChanges "true" ;
     skosmos:showPropertyInSearch skos:note ;
     skosmos:useModifiedDate "true";
@@ -192,7 +195,6 @@
     void:uriSpace "http://www.skosmos.skos/test-551-A/";
     skosmos:language "fi" ;
     skosmos:defaultLanguage "fi";
-    skosmos:showChangeList "true" ;
     skosmos:showDeprecatedChanges "true" ;
     skosmos:useModifiedDate "true" ;
     skosmos:sparqlGraph <http://www.skosmos.skos/test-551-A/> ;
@@ -207,6 +209,7 @@
 	skosmos:marcSourceCode "ysa/gen";
 	skosmos:language "en";
 	skosmos:showTopConcepts "true";
+    skosmos:conceptSchemesInHierarchy "true";
 	skosmos:sparqlGraph <http://www.skosmos.skos/multiple-schemes/> .
 
 :testdiff a skosmos:Vocabulary, void:Dataset ;
@@ -215,7 +218,6 @@
 	void:uriSpace "http://www.skosmos.skos/onto/testdiff#";
 	skosmos:language "fi", "en";
 	skosmos:sparqlDialect "JenaText";
-	skosmos:fullAlphabeticalIndex "true";
 	skosmos:explicitLanguageTags "true";
 	skosmos:defaultSidebarView "groups";
 	skosmos:defaultConceptSidebarView "groups";
@@ -230,7 +232,7 @@
 	dc:subject :cat_general ;
 	void:dataDump <http://skosmos.skos/dump/test/groups.ttl>,
 		<http://skosmos.skos/dump/test/groups> ;
-	void:uriSpace "http://www.skosmos.skos/onto/groups/";
+	void:uriSpace "http://www.skosmos.skos/groups/";
 	skosmos:arrayClass isothes:ThesaurusArray ;
     skosmos:groupClass skos:Collection ;
     skosmos:defaultConceptSidebarView "groups" ;
@@ -269,6 +271,23 @@
                     "Testi lyhyt"@fi;
 	skosmos:hasMultiLingualProperty <http://www.skosmos.skos/multiLingOn>;
 	skosmos:sparqlGraph <http://www.skosmos.skos/test-hierarchy/> .
+
+:test-hierarchy-without-top-concepts a skosmos:Vocabulary, void:Dataset ;
+	dc:title "Test hierarchy without top concepts"@en ;
+	dc:subject :cat_science ;
+    dc:type mdrtype:ONTOLOGY ;
+	void:dataDump <http://skosmos.skos/dump/test-hierarchy-without-top-concepts/> ;
+	void:uriSpace "http://www.skosmos.skos/test-hierarchy-without-top-concepts/";
+	skosmos:arrayClass isothes:ThesaurusArray ;
+	skosmos:defaultLanguage "en";
+    skosmos:feedbackRecipient "developer@vocabulary.org";
+	skosmos:groupClass skos:Collection;
+	skosmos:marcSourceCode "ysa/fi"@fi, "allärs/sv"@sv;
+	skosmos:language "en";
+	skosmos:shortName "Test short",
+                    "Testi lyhyt"@fi;
+	skosmos:hasMultiLingualProperty <http://www.skosmos.skos/multiLingOn>;
+	skosmos:sparqlGraph <http://www.skosmos.skos/test-hierarchy-without-top-concepts/> .
 
 :showDeprecated a skosmos:Vocabulary, void:Dataset ;
 	dc11:title "Show deprecated test vocabulary"@en ;
@@ -364,6 +383,15 @@
 	skosmos:sparqlGraph <http://www.skosmos.skos/subtag/> ;
 	skosmos:sparqlDialect "JenaText" .
 
+:multilang a skosmos:Vocabulary, void:Dataset ;
+	dc11:title "A vocabulary for testing multiple languages"@en ;
+	dc:subject :cat_general ;
+	void:uriSpace "http://www.skosmos.skos/multilang/";
+	skosmos:language "en", "sv", "de", "fi";
+    skosmos:fallbackLanguages ( "fi" "en" "sv" "de" ) ;
+	skosmos:sparqlGraph <http://www.skosmos.skos/multilang/> ;
+	skosmos:sparqlDialect "JenaText" .
+
 :collation a skosmos:Vocabulary, void:Dataset ;
     dc11:title "A vocabulary for test SPARQL with collation"@en ;
     dc:subject :cat_general ;
@@ -438,14 +466,24 @@
     skosmos:sparqlGraph <http://www.skosmos.skos/test-notation-sort/>;
     skosmos:mainConceptScheme test:notationMainConceptScheme .
 
+:hash a skosmos:Vocabulary, void:Dataset ;
+    dc:title "Hash URI namespace"@en ;
+    skosmos:language "en";
+    skosmos:showTopConcepts "true";
+    skosmos:sparqlGraph <http://www.skosmos.skos/hash/>;
+    void:uriSpace "http://www.skosmos.skos/hash#" .
+
+:testPlugin a skosmos:Vocabulary, void:Dataset ;
+    dc:title "Test plugin"@en ;
+    void:dataDump <http://skosmos.skos/dump/test/> ;
+    void:uriSpace "http://www.skosmos.skos/test/" ;
+    skosmos:vocabularyPlugins ( "test-plugin-vue" "test-plugin-vanilla-js" ) .
+
 :paramPluginTest a skosmos:Vocabulary, void:Dataset ;
 	dc:title "Test plugin order"@en ;
 	void:dataDump <http://skosmos.skos/dump/test/> ;
 	void:uriSpace "http://www.skosmos.skos/test/";
-	skosmos:vocabularyPlugins "plugin2", "Bravo", :parameterizedPlugin, "plugin1";
-	skosmos:usePlugin "plugin1" ;
-	skosmos:usePlugin "plugin3" ;
-	skosmos:useParamPlugin :parameterizedPlugin .
+	skosmos:vocabularyPlugins "plugin2", "Bravo", :parameterizedPlugin, "plugin1" .
 
 :paramPluginOrderTest a skosmos:Vocabulary, void:Dataset ;
 	dc:title "Test plugin parameters"@en ;
@@ -459,10 +497,7 @@
     skosmos:feedbackRecipient "developer@vocabulary.org";
 	skosmos:groupClass skos:Collection;
 	skosmos:language "en";
-	skosmos:vocabularyPlugins ("plugin2" "Bravo" "plugin1");
-	skosmos:usePlugin "plugin1" ;
-	skosmos:usePlugin "plugin3" ;
-	skosmos:useParamPlugin :parameterizedPlugin ;
+	skosmos:vocabularyPlugins ("plugin2" "Bravo" "plugin1" :parameterizedPlugin);
 	skosmos:showTopConcepts "true";
 	skosmos:shortName "Test params",
                     "Testi parametri"@fi;
@@ -520,6 +555,23 @@
 	void:uriSpace "http://www.skosmos.skos/testOrder/";
 	skosmos:language "en";
 	skosmos:sparqlGraph <http://www.skosmos.skos/testOrder/> .
+
+:altlabel a skosmos:Vocabulary, void:Dataset ;
+	dc:title "Alternate labels"@en ;
+	dc:subject :cat_science ;
+	void:uriSpace "http://www.skosmos.skos/altlabel/";
+	skosmos:language "en", "fi";
+	skosmos:sparqlGraph <http://www.skosmos.skos/altlabel/> .
+
+:test-rdf-list a skosmos:Vocabulary, void:Dataset ;
+	dc:title "Test RDF list ontology"@en ;
+	dc:subject :cat_science ;
+	void:uriSpace "http://www.skosmos.skos/test-rdf-list/" ;
+	skosmos:defaultLanguage "en" ;
+	skosmos:language "en" ;
+	skosmos:showTopConcepts "true";
+	skosmos:groupClass skos:Collection;
+	skosmos:sparqlGraph <http://www.skosmos.skos/test-rdf-list/> .
 
 <http://skosmos.skos/dump/test/groups> dc:format "application/rdf+xml" .
 

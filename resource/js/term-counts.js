@@ -25,7 +25,8 @@ function startTermCountsApp () {
       }
     },
     mounted () {
-      fetch('rest/v1/' + window.SKOSMOS.vocab + '/labelStatistics?lang=' + window.SKOSMOS.lang)
+      const params = new URLSearchParams({ lang: window.SKOSMOS.lang })
+      fetch(`rest/v1/${window.SKOSMOS.vocab}/labelStatistics?${params}`)
         .then(data => {
           return data.json()
         })
@@ -38,10 +39,10 @@ function startTermCountsApp () {
         <table class="table" id="term-stats">
           <tbody>
             <tr>
-              <th class="main-table-label fw-bold">{{ conceptLanguageLabel }}</th>
-              <th class="main-table-label fw-bold">{{ preferredTermsLabel }}</th>
-              <th class="main-table-label fw-bold">{{ alternateTermsLabel }}</th>
-              <th class="main-table-label fw-bold">{{ hiddenTermsLabel }}</th>
+              <th>{{ conceptLanguageLabel }}</th>
+              <th>{{ preferredTermsLabel }}</th>
+              <th>{{ alternateTermsLabel }}</th>
+              <th>{{ hiddenTermsLabel }}</th>
             </tr>
             <template v-if="languages.length">
               <term-counts :languages="languages"></term-counts>
@@ -66,7 +67,9 @@ function startTermCountsApp () {
       `
   })
 
-  termCountsApp.mount('#term-counts')
+  if (document.getElementById('term-counts')) {
+    termCountsApp.mount('#term-counts')
+  }
 }
 
 onTranslationReady(startTermCountsApp)

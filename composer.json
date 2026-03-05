@@ -3,21 +3,19 @@
   "description": "Thesaurus and controlled vocabulary browser using SKOS and SPARQL",
   "type": "project",
   "license": "MIT",
-  "version": "3.0-dev",
+  "version": "3.2-dev",
   "require": {
-    "sweetrdf/easyrdf": "1.13.*",
-    "symfony/polyfill-php80": "1.*",
-    "symfony/polyfill-php81": "1.*",
-    "twig/twig": "3.14.*",
+    "sweetrdf/easyrdf": "~1.18.2",
+    "twig/twig": "3.22.*",
     "willdurand/negotiation": "3.1.*",
     "punic/punic": "3.8.*",
     "ml/json-ld": "1.*",
     "ext-intl": "*",
     "ext-mbstring": "*",
     "ext-xsl": "*",
-    "monolog/monolog": "3.7.*",
+    "monolog/monolog": "3.9.*",
     "symfony/translation": "6.4.*",
-    "symfony/translation-contracts": "3.5.*",
+    "symfony/translation-contracts": "3.6.*",
     "symfony/twig-bundle": "6.4.*"
   },
   "require-dev": {
@@ -31,7 +29,7 @@
     "symfony/lokalise-translation-provider": "6.4.*",
     "symfony/console": "6.4.*",
     "mockery/mockery": "1.6.*",
-    "friendsofphp/php-cs-fixer": "3.64.*"
+    "friendsofphp/php-cs-fixer": "3.90.*"
   },
   "autoload": {
     "classmap": ["src/", "src/controller/", "src/model/", "src/util", "src/model/sparql/"]

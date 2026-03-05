@@ -1,0 +1,17 @@
+{% set pageType = 'global-search' %}
+{% extends "base-template.twig" %}
+{% block title %}'{{ term }}' - {{ GlobalConfig.serviceName }}{% endblock %}
+{% block url %}{{ BaseHref }}{{ request.langurl }}{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="row">
+    <div id="main-content">
+      <div class="p-4 pt-4" id="search-results">
+        <h1>{{ "%search_count% results for '%term%'" | trans({'%search_count%': search_count, '%term%' : term}) }}</h1>
+        {% include "search-results.inc.twig" %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

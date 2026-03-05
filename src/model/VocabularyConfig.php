@@ -35,17 +35,17 @@ class VocabularyConfig extends BaseConfig
         parent::__construct($model, $resource);
         $this->globalPlugins = $globalPlugins;
         $this->setPropertyLabelOverrides();
-        $pluginArray = $this->getPluginArray();
-        $this->pluginRegister = new PluginRegister($pluginArray);
+        $pluginNames = $this->getPluginNames();
+        $this->pluginRegister = new PluginRegister($pluginNames);
     }
 
     /**
      * Get an ordered array of plugin names with order configured in skosmos:vocabularyPlugins
      * @return array of plugin names
      */
-    public function getPluginArray(): array
+    public function getPluginNames(): array
     {
-        $this->setParameterizedPlugins();
+        $this->pluginParameters = array();
         $pluginArray = array();
         $vocabularyPlugins = $this->resource->getResource('skosmos:vocabularyPlugins');
         if (!$vocabularyPlugins instanceof EasyRdf\Collection) {
@@ -57,51 +57,13 @@ class VocabularyConfig extends BaseConfig
                     $pluginArray[] = $plugin->getValue();
                 } else {
                     $pluginArray[] = $plugin->getLiteral('skosmos:usePlugin')->getValue();
+                    // Process parameters for parameterized plugins
+                    $this->setPluginParametersFromResource($plugin);
                 }
             }
         }
         $pluginArray = array_merge($pluginArray, $this->globalPlugins);
-
-        $paramPlugins = $this->resource->allResources('skosmos:useParamPlugin');
-        if ($paramPlugins) {
-            foreach ($paramPlugins as $plugin) {
-                $pluginArray[] = $plugin->getLiteral('skosmos:usePlugin')->getValue();
-            }
-        }
-        $plugins = $this->resource->allLiterals('skosmos:usePlugin');
-        if ($plugins) {
-            foreach ($plugins as $pluginlit) {
-                $pluginArray[] = $pluginlit->getValue();
-            }
-        }
         return array_values(array_unique($pluginArray));
-    }
-
-    /**
-     * Sets array of parameterized plugins
-     * @return void
-     */
-    private function setParameterizedPlugins(): void
-    {
-        $this->pluginParameters = array();
-
-        $vocabularyPlugins = $this->resource->getResource('skosmos:vocabularyPlugins');
-        if (!$vocabularyPlugins instanceof EasyRdf\Collection) {
-            $vocabularyPlugins = $this->resource->all('skosmos:vocabularyPlugins');
-        }
-        if ($vocabularyPlugins) {
-            foreach ($vocabularyPlugins as $plugin) {
-                if ($plugin instanceof EasyRdf\Resource) {
-                    $this->setPluginParameters($plugin);
-                }
-            }
-        }
-        $pluginResources = $this->resource->allResources('skosmos:useParamPlugin');
-        if ($pluginResources) {
-            foreach ($pluginResources as $pluginResource) {
-                $this->setPluginParameters($pluginResource);
-            }
-        }
     }
 
     /**
@@ -109,14 +71,13 @@ class VocabularyConfig extends BaseConfig
      * @param Easyrdf\Resource $pluginResource
      * @return void
      */
-    private function setPluginParameters(Easyrdf\Resource $pluginResource): void
+    private function setPluginParametersFromResource(Easyrdf\Resource $pluginResource): void
     {
         $pluginName = $pluginResource->getLiteral('skosmos:usePlugin')->getValue();
         $this->pluginParameters[$pluginName] = array();
 
         $pluginParams = $pluginResource->allResources('skosmos:parameters');
         foreach ($pluginParams as $parameter) {
-
             $paramLiterals = $parameter->allLiterals('schema:value');
             foreach ($paramLiterals as $paramLiteral) {
                 $paramName = $parameter->getLiteral('schema:propertyID')->getValue();
@@ -129,6 +90,7 @@ class VocabularyConfig extends BaseConfig
             }
         }
     }
+
 
     /**
      * Sets array of configured property label overrides
@@ -268,7 +230,16 @@ class VocabularyConfig extends BaseConfig
      */
     public function getTitle($lang = null)
     {
-        return $this->getLiteral('dc:title', false, $lang);
+        $title = $this->getLiteral('dc:title', null, $lang);
+        if ($title === null) {
+            // not found using given language or without language tag
+            // try any language
+            $literal = $this->resource->getLiteral('dc:title');
+            if ($literal) {
+                $title = $literal->getValue();
+            }
+        }
+        return $title;
     }
 
     /**
@@ -724,17 +695,17 @@ class VocabularyConfig extends BaseConfig
     /**
      * Returns an array of fallback languages that is ordered by priority and
      * defined in the vocabulary configuration as a collection.
-     * Additionally, the chosen content language is inserted with the highest priority
+     * Additionally, if the chosen content language is given, is inserted with the highest priority
      * and the vocab default language is inserted with the lowest priority.
      * @param string $clang
      * @return array of language code strings
      */
-    public function getLanguageOrder($clang)
+    public function getLanguageOrder($clang = null)
     {
         if (array_key_exists($clang, $this->languageOrderCache)) {
             return $this->languageOrderCache[$clang];
         }
-        $ret = array($clang);
+        $ret = ($clang !== null) ? array($clang) : array();
         $fallbacks = !empty($this->resource->get('skosmos:fallbackLanguages')) ? $this->resource->get('skosmos:fallbackLanguages') : array();
         foreach ($fallbacks as $lang) {
             if (!in_array($lang, $ret)) {

@@ -9,7 +9,7 @@ class WebControllerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->model = Mockery::mock(new Model('/../../tests/testconfig.ttl'));
+        $this->model = Mockery::mock(new Model());
         $this->webController = new WebController($this->model);
     }
 
@@ -261,6 +261,29 @@ class WebControllerTest extends TestCase
         // configured/available languages are en, fi, fr
         // the best matching language for the given Accept-Language is fi
         $this->assertEquals($guessedLanguage, 'fi');
+    }
+
+    public function testFindCustomTemplates() {
+        $dir = __DIR__ . '/custom-templates';
+        $result = $this->webController->findCustomTemplates($dir);
+
+        $this->assertArrayHasKey('about', $result, 'Slot "about" should be present in the result.');
+        $this->assertContains('about/0-testing.twig', $result['about'], 'Expected template "about/0-testing.twig" not found.');
+    }
+
+    public function testFindCustomTemplatesDirectoryNotFound() {
+        $dir = __DIR__ . '/custom-templates.not_found';
+        $result = $this->webController->findCustomTemplates($dir);
+        $this->assertEmpty($result);
+    }
+
+    public function testParseVocabularyLanguageOrder() {
+        $request = new Request($this->model);
+        $vocab = $this->model->getVocabulary('multilang');
+
+        $languageOrder = $this->webController->parseVocabularyLanguageOrder($vocab);
+        $expected = array( 'fi' => 'finnois', 'en' => 'anglais', 'sv' => 'suédois', 'de' => 'allemand' );
+        $this->assertSame($expected, $languageOrder);
     }
 
 }

@@ -37,7 +37,7 @@ class WebController extends Controller
         }
 
         // specify where to look for templates and cache
-        $loader = new \Twig\Loader\FilesystemLoader(__DIR__ . '/../view');
+        $loader = new \Twig\Loader\FilesystemLoader([__DIR__ . '/../../custom-templates', __DIR__ . '/../view']);
         // initialize Twig environment
         $this->twig = new \Twig\Environment($loader, array('cache' => $tmpDir,'auto_reload' => true));
         // used for setting the base href for the relative urls
@@ -48,6 +48,9 @@ class WebController extends Controller
 
         // setting the list of properties to be displayed in the search results
         $this->twig->addGlobal("PreferredProperties", array('skos:prefLabel', 'skos:narrower', 'skos:broader', 'skosmos:memberOf', 'skos:altLabel', 'skos:related'));
+
+        // register a Twig filter for generating URLs for global pages (landing, about, feedback, vocab-home..)
+        $this->twig->addExtension(new GlobalUrlExtension());
 
         // register a Twig filter for generating URLs for vocabulary resources (concepts and groups)
         $this->twig->addExtension(new LinkUrlExtension($model));
@@ -67,6 +70,33 @@ class WebController extends Controller
             $this->honeypot->disable();
         }
         $this->twig->addGlobal('honeypot', $this->honeypot);
+
+        // populate the customizable content slots from custom templates
+        $customTemplates = $this->findCustomTemplates("../custom-templates");
+        $this->twig->addGlobal('customTemplates', $customTemplates);
+    }
+
+    /**
+     * Find any custom templates from the given directory and return them as an array.
+     * @param string $dir path of custom templates directory
+     * @return array array of custom template filenames, keyed by slot
+     */
+    public function findCustomTemplates($dir)
+    {
+        $customTemplateSubDirs = glob($dir . '/*', GLOB_ONLYDIR);
+        $customTemplates = [];
+
+        foreach ($customTemplateSubDirs as $slotDir) {
+            $slotName = basename($slotDir);
+            $files = glob($slotDir . '/*.twig');
+            // Strip the directory part to make the file paths relative to the directory.
+            // The "custom-templates" directory is registered to the Twig FilesystemLoader.
+            $customTemplates[$slotName] = array_map(function ($file) use ($dir) {
+                return str_replace($dir . '/', '', $file);
+            }, $files);
+        }
+
+        return $customTemplates;
     }
 
     /**
@@ -129,6 +159,29 @@ class WebController extends Controller
     }
 
     /**
+    * Renders the list of supported languages from vocabulary config in order.
+    * The ordering is done according to the language order parameter in vocabulary config if such exists
+    * @param Vocabulary $vocab the vocabulary object
+    * @return array with language codes as keys and language labels as values
+    */
+    public function parseVocabularyLanguageOrder($vocab)
+    {
+        $vocabContentLanguages = array_flip($vocab->getConfig()->getLanguages());
+        $languageOrder = $vocab->getConfig()->getLanguageOrder();
+
+        $tmpList = [];
+
+        foreach ($languageOrder as $vocLang) {
+            if (isset($vocabContentLanguages[$vocLang])) {
+                $tmpList[$vocLang] = $vocabContentLanguages[$vocLang];
+                unset($vocabContentLanguages[$vocLang]);
+            }
+        }
+        return $tmpList + $vocabContentLanguages;
+    }
+
+
+    /**
      * Loads and renders the landing page view.
      * @param Request $request
      */
@@ -140,8 +193,10 @@ class WebController extends Controller
         // set template variables
         $categoryLabel = $this->model->getClassificationLabel($request->getLang());
         $sortedVocabs = $this->model->getVocabularyList(false, true);
-        $langList = $this->model->getLanguages($request->getLang());
+        $contentLanguages = array_flip($this->model->getLanguages($request->getLang()));
         $listStyle = $this->listStyle();
+
+        $vocabTypes = $this->model->getTypes(null, $request->getLang());
 
         // render template
         echo $template->render(
@@ -149,8 +204,9 @@ class WebController extends Controller
                 'sorted_vocabs' => $sortedVocabs,
                 'category_label' => $categoryLabel,
                 'languages' => $this->languages,
-                'lang_list' => $langList,
+                'content_languages' => $contentLanguages,
                 'request' => $request,
+                'types' => $vocabTypes,
                 'list_style' => $listStyle
             )
         );
@@ -184,16 +240,21 @@ class WebController extends Controller
         $template = $this->twig->load('concept.twig');
 
         $crumbs = $vocab->getBreadCrumbs($request->getContentLang(), $uri);
+
+        $vocabTypes = $this->model->getTypes($request->getVocabid(), $request->getLang());
+
         echo $template->render(
             array(
             'concept' => $concept,
             'vocab' => $vocab,
             'concept_uri' => $uri,
             'languages' => $this->languages,
+            'content_languages' => $this->parseVocabularyLanguageOrder($vocab),
             'explicit_langcodes' => $langcodes,
             'visible_breadcrumbs' => $crumbs['breadcrumbs'],
             'hidden_breadcrumbs' => $crumbs['combined'],
             'request' => $request,
+            'types' => $vocabTypes,
             'plugin_params' => $pluginParameters,
             'custom_labels' => $customLabels)
         );
@@ -365,6 +426,7 @@ class WebController extends Controller
             $countAndResults = $this->model->searchConceptsAndInfo($parameters);
             $counts = $countAndResults['count'];
             $searchResults = $countAndResults['results'];
+            $vocabTypes = $this->model->getTypes(null, $request->getLang());
         } catch (Exception $e) {
             $errored = true;
             header("HTTP/1.0 500 Internal Server Error");
@@ -375,21 +437,24 @@ class WebController extends Controller
         $vocabList = $this->model->getVocabularyList();
         $sortedVocabs = $this->model->getVocabularyList(false, true);
         $langList = $this->model->getLanguages($lang);
+        $contentLanguages = array_flip($this->model->getLanguages($request->getLang()));
 
         echo $template->render(
             array(
                 'search_count' => $counts,
                 'languages' => $this->languages,
+                'content_languages' => $contentLanguages,
                 'search_results' => $searchResults,
                 'rest' => $parameters->getOffset() > 0,
                 'global_search' => true,
                 'search_failed' => $errored,
                 'term' => $request->getQueryParamRaw('q'),
                 'lang_list' => $langList,
-                'vocabs' => str_replace(' ', '+', $vocabs),
+                'vocabs' => isset($vocabs) ? str_replace(' ', '+', $vocabs) : null,
                 'vocab_list' => $vocabList,
                 'sorted_vocabs' => $sortedVocabs,
                 'request' => $request,
+                'types' => $vocabTypes,
                 'parameters' => $parameters
             )
         );
@@ -417,6 +482,7 @@ class WebController extends Controller
                     'languages' => $this->languages,
                     'vocab' => $vocab,
                     'request' => $request,
+                    'content_languages' => $this->parseVocabularyLanguageOrder($vocab),
                     'search_results' => $searchResults
                 )
             );
@@ -450,6 +516,7 @@ class WebController extends Controller
         echo $template->render(
             array(
                 'languages' => $this->languages,
+                'content_languages' => $this->parseVocabularyLanguageOrder($vocab),
                 'vocab' => $vocab,
                 'search_results' => $searchResults,
                 'search_count' => $counts,
@@ -483,13 +550,17 @@ class WebController extends Controller
 
         $template = $this->twig->load('vocab-home.twig');
 
+        $vocabTypes = $this->model->getTypes($request->getVocabid(), $request->getLang());
+
         echo $template->render(
             array(
                 'languages' => $this->languages,
                 'vocab' => $vocab,
+                'content_languages' => $this->parseVocabularyLanguageOrder($vocab),
                 'search_letter' => 'A',
                 'active_tab' => $defaultView,
                 'request' => $request,
+                'types' => $vocabTypes,
                 'plugin_params' => $pluginParameters
             )
         );

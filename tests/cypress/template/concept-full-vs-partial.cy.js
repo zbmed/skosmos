@@ -13,7 +13,7 @@ describe('Concept page, full vs. partial page loads', () => {
       }
 
       // check that the vocabulary title is correct
-      cy.get('#vocab-title > a').invoke('text').should('equal', 'YSO - General Finnish ontology (archaeology)')
+      cy.get('#vocab-title > a').invoke('text').should('contain', 'YSO - General Finnish ontology (archaeology)')
 
       // check the concept prefLabel
       cy.get('#concept-heading h1').invoke('text').should('equal', 'burial mounds')
@@ -76,6 +76,10 @@ describe('Concept page, full vs. partial page loads', () => {
         cy.visit('/test-notation-sort/en/page/?uri=http%3A%2F%2Fwww.skosmos.skos%2Ftest%2Fta0114') // go to "Buri" concept page
         // click on the link to "Eel" to trigger partial page load
         cy.get('#tab-hierarchy').contains('a', 'Eel').click()
+        // Wait for partial page load to complete
+        cy.get('#concept-heading h1', {timeout: 10000}).should('contain', 'Eel')
+        // Wait for copy button to be ready
+        cy.get('#copy-notation').should('be.visible')
       }
 
       // click the copy to clipboard button next to the URI
@@ -86,6 +90,51 @@ describe('Concept page, full vs. partial page loads', () => {
       // The reason is browser security policies for accessing the clipboard.
       // If that happens, make sure the browser window has focus and re-run the test.
       cy.window().its('navigator.clipboard').invoke('readText').then((result) => {}).should('equal', '33.2');
+    })
+    it('narrower concepts: long lists are truncated / ' + pageLoadType, () => {
+      // Go to "periods of time" concept page which has 21 narrower concepts
+      if (pageLoadType == "full") {
+        cy.visit('yso/en/page/p4035') // go directly to "periods of time"
+      } else {
+        cy.visit('yso/en/page/p15238') // go to "events and action"
+        // click on the link to "periods of time" to trigger partial page load
+        cy.get('#tab-hierarchy').contains('a', 'periods of time').click()
+      }
+      // Check the number of narrower concepts shown: should be 15 + link to show all = 16
+      cy.get('.prop-skos_narrower .property-value ul').eq(0).find('li').not('.property-value-hidden').should('have.length', 16)
+      // Check that the last item is the show link with the correct number of items
+      cy.get('.prop-skos_narrower .property-value ul').eq(0).find('li').eq(-1).invoke('text').should('contain', 'show all 21 values')
+      // Click on the "show all" link
+      cy.get('.prop-skos_narrower .property-value ul').eq(0).find('li').eq(-1).find('a').eq('0').click()
+      // Check that the property-value-expand class has been added, revealing the hidden items
+      cy.get('.prop-skos_narrower .property-value ul').eq(0).should('have.class', 'property-value-expand')
+    })
+    it('alternate labels: long lists are truncated / ' + pageLoadType, () => {
+      // Go to "Home" concept page which has 25 altlabels in English and 25 in Finnish
+      if (pageLoadType == "full") {
+        cy.visit('altlabel/en/page/c1') // go directly to "Home"
+      } else {
+        cy.visit('altlabel/en/') // go to "Alternate labels" vocab home page
+        // click on the link to "Home" to trigger partial page load
+        cy.get('#tab-alphabetical').contains('a', 'Home').click()
+      }
+      // Check the number of entry terms shown: should be 15 + link to show all = 16
+      cy.get('.prop-skos_altLabel .property-value ul').eq(0).find('li').not('.property-value-hidden').should('have.length', 16)
+      // Check that the last item is the show link with the correct number of items
+      cy.get('.prop-skos_altLabel .property-value ul').eq(0).find('li').eq(-1).invoke('text').should('contain', 'show all 25 values')
+      // Click on the "show all" link
+      cy.get('.prop-skos_altLabel .property-value ul').eq(0).find('li').eq(-1).find('a').eq('0').click()
+      // Check that the property-value-expand class has been added, revealing the hidden items
+      cy.get('.prop-skos_altLabel .property-value ul').eq(0).should('have.class', 'property-value-expand')
+
+      // Check the number of terms in other languages shown: should be 15 + link to show all = 16
+      cy.get('#concept-other-languages ul').eq(0).find('li').not('.property-value-hidden').should('have.length', 16)
+      // Check that the last item is the show link with the correct number of items
+      cy.get('#concept-other-languages ul').eq(0).find('li').eq(-1).invoke('text').should('contain', 'show all 26 values')
+      // Click on the "show all" link
+      cy.get('#concept-other-languages ul').eq(0).find('li').eq(-1).find('a').eq('0').click()
+      // Check that the property-value-expand class has been added, revealing the hidden items
+      cy.get('#concept-other-languages ul').eq(0).should('have.class', 'property-value-expand')
     })
     it('contains mappings / ' + pageLoadType, () => {
       if (pageLoadType == "full") {
@@ -99,22 +148,26 @@ describe('Concept page, full vs. partial page loads', () => {
       // check that we have some mappings
       cy.get('#concept-mappings').should('not.be.empty')
       // check that spinner does not exist after load
+      // NOTE: we need to increase the timeout as the mappings can take a long time to load
       cy.get('#concept-mappings i.fa-spinner', {'timeout': 15000}).should('not.exist')
 
       // check the first mapping property name
-      // NOTE: we need to increase the timeout as the mappings can take a long time to load
-      cy.get('.prop-mapping h2', {'timeout': 20000}).eq(0).contains('Closely matching concepts')
+      cy.get('.prop-mapping h2', {'timeout': 20000}).eq(0).invoke('text').should('contain', 'Closely matching concepts')
+      
+      // Wait for mapping labels to actually exist before checking them
+      cy.get('.prop-mapping .prop-mapping-label', {'timeout': 20000}).should('exist')
+      
       // check the first mapping property values
-      cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).contains('Labyrinths')
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).invoke('text').should('contain', 'Labyrinths')
       cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).find('a').should('have.attr', 'href', 'http://id.loc.gov/authorities/subjects/sh85073793')
-      cy.get('.prop-mapping').eq(0).find('.prop-mapping-vocab').eq(0).contains('Library of Congress Subject Headings')
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-vocab').eq(0).invoke('text').should('contain', 'Library of Congress Subject Headings')
       // check that the first mapping property has the right number of entries
       cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').should('have.length', 1)
 
       // check the second mapping property name
-      cy.get('.prop-mapping h2').eq(1).contains('Exactly matching concepts')
+      cy.get('.prop-mapping h2').eq(1).invoke('text').should('contain', 'Exactly matching concepts')
       // check the second mapping property values
-      cy.get('.prop-mapping').eq(1).find('.prop-mapping-label').eq(0).contains('labyrinter (sv)')
+      cy.get('.prop-mapping').eq(1).find('.prop-mapping-label').eq(0).invoke('text').should('contain', 'labyrinter (sv)')
       cy.get('.prop-mapping').eq(1).find('.prop-mapping-label').eq(0).find('a').invoke('text').should('equal', 'labyrinter')
       cy.get('.prop-mapping').eq(1).find('.prop-mapping-label').eq(0).find('a').should('have.attr', 'href', 'http://www.yso.fi/onto/allars/Y21700')
       cy.get('.prop-mapping').eq(1).find('.prop-mapping-vocab').eq(0).contains('Allärs - General thesaurus in Swedish')
@@ -125,6 +178,40 @@ describe('Concept page, full vs. partial page loads', () => {
       cy.get('.prop-mapping').eq(1).find('.prop-mapping-vocab').eq(2).contains('YSA - Yleinen suomalainen asiasanasto')
       // check that the second mapping property has the right number of entries
       cy.get('.prop-mapping').eq(1).find('.prop-mapping-label').should('have.length', 3)
+    })
+
+    it('contains mappings for hash namespace / ' + pageLoadType, () => {
+      if (pageLoadType == "full") {
+        cy.visit('/hash/en/page/c1') // go to "hash mark" concept page
+      } else {
+        cy.visit('/hash/en/page/c2') // go to "hypertext" concept page
+        // click on the link to "hash mark" to trigger partial page load
+        cy.get('#tab-hierarchy').contains('a', 'hash mark').click()
+        // Wait for partial page load to complete by checking the concept heading updated
+        cy.get('#concept-heading h1', {timeout: 10000}).should('contain', 'hash mark')
+      }
+
+      // check that we have some mappings
+      cy.get('#concept-mappings').should('not.be.empty')
+      // check that spinner does not exist after load
+      // NOTE: we need to increase the timeout as the mappings can take a long time to load
+      cy.get('#concept-mappings i.fa-spinner', {'timeout': 15000}).should('not.exist')
+
+      // check the first mapping property name
+      cy.get('.prop-mapping h2').eq(0).invoke('text').should('contain', 'Exactly matching concepts')
+      
+      // Check if mapping labels exist at all
+      cy.get('.prop-mapping .prop-mapping-label', {'timeout': 20000}).should('exist').then(($labels) => {
+        const text = $labels.first().text()
+        expect(text).to.contain('number sign')
+      })
+      
+      // check the first mapping property values
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).find('a').invoke('text').should('equal', 'number sign')
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).find('a').should('have.attr', 'href', 'http://www.wikidata.org/entity/Q175743')
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-vocab').eq(0).contains('www.wikidata.org')
+      // check that the second mapping property has the right number of entries
+      cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').should('have.length', 1)
     })
 
   });

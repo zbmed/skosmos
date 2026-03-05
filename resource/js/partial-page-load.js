@@ -23,6 +23,13 @@ const fetchWithAbort = (function () {
   }
 })()
 
+const updateTopbarNav = (conceptHTML) => {
+  // update topbar navigation with language links
+  const conceptTopbarNav = conceptHTML.querySelector('#topbar-nav')
+  const topbarNav = document.querySelector('#topbar-nav')
+  topbarNav.innerHTML = conceptTopbarNav.innerHTML
+}
+
 const updateMainContent = (conceptHTML) => {
   // concept card
   const conceptMainContent = conceptHTML.querySelectorAll('#main-content > :not(#concept-mappings)') // all elements from concept card except concept mappings
@@ -35,9 +42,11 @@ const updateMainContent = (conceptHTML) => {
   }
 
   // inserting concept card into vocab info
+  const fragment = document.createDocumentFragment()
   for (const elem of conceptMainContent) {
-    mainContent.prepend(elem)
+    fragment.appendChild(elem)
   }
+  mainContent.prepend(fragment)
 }
 
 const updateTitle = (conceptHTML) => {
@@ -45,8 +54,8 @@ const updateTitle = (conceptHTML) => {
 }
 
 const updateJsonLD = (conceptHTML) => {
-  const JsonLD = document.querySelector('script[type="application/ld+json"]')
-  const newJsonLD = conceptHTML.querySelector('script[type="application/ld+json"]')
+  const JsonLD = document.querySelector('#json-ld-data')
+  const newJsonLD = conceptHTML.querySelector('#json-ld-data')
   if (JsonLD) {
     JsonLD.innerHTML = '{}'
     if (newJsonLD) {
@@ -87,12 +96,16 @@ const partialPageLoad = (event, pageUri) => {
       if (window.history.pushState) { window.history.pushState({ url: pageUri }, '', pageUri) }
 
       // removing disabled class from hierarchy tab
-      if (document.querySelector('#hierarchy > a')) { document.querySelector('#hierarchy > a').classList.remove('disabled') }
+      if (document.querySelector('#hierarchy > a')) {
+        document.querySelector('#hierarchy').classList.remove('disabled')
+        document.querySelector('#hierarchy > a').classList.remove('disabled')
+      }
 
       // concept page HTML
       const conceptHTML = document.createElement('div')
       conceptHTML.innerHTML = data.trim()
 
+      updateTopbarNav(conceptHTML)
       updateMainContent(conceptHTML)
       updateTitle(conceptHTML)
       updateJsonLD(conceptHTML)
@@ -103,9 +116,7 @@ const partialPageLoad = (event, pageUri) => {
       document.dispatchEvent(event)
     })
     .catch(error => {
-      if (error.name === 'AbortError') {
-        console.log('Fetch aborted for ' + pageUri)
-      } else {
+      if (error.name !== 'AbortError') {
         throw error
       }
     })
