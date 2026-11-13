@@ -690,7 +690,7 @@ header .container-fluid .row {
   #search-wrapper ul {
     scrollbar-color: var(--scrollbar-thumb) var(--search-dropdown-bg);
   }
-} 
+}
 
 /* Setting scrollbar style for Webkit based browsers (Chrome, Safari, Edge, etc) */
 #search-wrapper ul::-webkit-scrollbar {
@@ -709,8 +709,8 @@ header .container-fluid .row {
     background-color: var(--scrollbar-thumb);
 }
 
-#search-wrapper ul::-webkit-scrollbar-track { 
-    background-color: var(--search-dropdown-bg); 
+#search-wrapper ul::-webkit-scrollbar-track {
+    background-color: var(--search-dropdown-bg);
     border-radius: 0;
 }
 
@@ -772,7 +772,7 @@ header .container-fluid .row {
   --bs-gutter-x: 2rem;
 }
 
-/* Landing page 
+/* Landing page
 -------------------------------------- */
 
 #background.landing { /* unused */
@@ -1216,7 +1216,7 @@ header .container-fluid .row {
   #sidebar .sidebar-list {
     scrollbar-color: var(--sidebar-scrollbar-thumb) var(--sidebar-scrollbar-track);
   }
-} 
+}
 
 /* Setting scrollbar style for Webkit based browsers (Chrome, Safari, Edge, etc) */
 #sidebar .sidebar-list::-webkit-scrollbar {
@@ -1235,9 +1235,9 @@ header .container-fluid .row {
     background-color: var(--sidebar-scrollbar-thumb);
 }
 
-#sidebar .sidebar-list::-webkit-scrollbar-track { 
+#sidebar .sidebar-list::-webkit-scrollbar-track {
     background-color: var(--sidebar-scrollbar-track);
-    border-radius: 0; 
+    border-radius: 0;
 }
 
 /*  Vocab-home & concept pages
@@ -1866,7 +1866,7 @@ h2#vocab-heading {
 }
 
 .altLabel.proplabel {
-  font-style: italic;  
+  font-style: italic;
 }
 
 /* About & feedback pages
@@ -1993,4 +1993,8 @@ h2#vocab-heading {
 footer {
   background-color: var(--footer-bg);
   color: var(--footer-text);
+}
+
+.tab-content {
+  overflow-x: auto;
 }
