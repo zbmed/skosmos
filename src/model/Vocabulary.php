@@ -199,7 +199,9 @@ class Vocabulary extends DataObject implements Modifiable
                 foreach ($conceptscheme->allLiterals($prop, null) as $val) {
                     $prop = (substr($prop, 0, 5) == 'dc11:') ? str_replace('dc11:', 'dc:', $prop) : $prop;
                     if ($val->getValue() instanceof DateTime) {
-                        $val = Punic\Calendar::formatDate($val->getValue(), 'full', $lang) . ' ' . Punic\Calendar::format($val->getValue(), 'HH:mm:ss', $lang);
+                        $dateFormatter = $this->model->getDateFormatter();
+                        // Use interface language for date formatting, not content language
+                        $val = ucfirst($dateFormatter->format($val->getValue()));
                     }
                     $ret[$prop][] = $val;
                 }
@@ -538,7 +540,8 @@ class Vocabulary extends DataObject implements Modifiable
                 $specials = true;
             }
         }
-        usort($letters, 'strcoll');
+        $collator = $this->model->getCollator();
+        usort($letters, [$collator, 'compare']);
         if ($specials) {
             $letters[] = '!*';
         }
@@ -668,7 +671,8 @@ class Vocabulary extends DataObject implements Modifiable
     public function getChangeList($prop, $clang, $offset, $limit)
     {
         $showDeprecated = $this->getConfig()->getShowDeprecatedChanges();
-        return $this->getSparql()->queryChangeList($prop, $clang, $offset, $limit, $showDeprecated);
+        $cutoffDays = $this->getConfig()->getChangeListCutoffDays();
+        return $this->getSparql()->queryChangeList($prop, $clang, $offset, $limit, $showDeprecated, $cutoffDays);
     }
 
     public function getTitle($lang = null)

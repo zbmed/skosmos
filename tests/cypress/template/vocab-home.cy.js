@@ -39,6 +39,29 @@ describe('Vocabulary home page', () => {
     // check that the vocabulary title is correct
     cy.get('#vocab-title > a').invoke('text').should('contain', 'Test ontology')
   })
+  it('Contains URI from default concept scheme', () => {
+    cy.visit('/test/en') // go to the "Test ontology" home page
+    // expected URI should be the same as Test ontology's skosmos:mainConceptScheme
+    const expectedUri = 'http://www.skosmos.skos/test/conceptscheme'
+    cy.contains('#main-content .property-label h3', /^URI$/)
+      .should('have.length', 1)
+      .closest('.row.property')
+      .find('.property-value ul li')
+      .should('have.length', 1)
+      .and('have.text', expectedUri)
+  })
+  it('Vocabulary property label is overridden', () => {
+    cy.visit('/conceptPropertyLabels/en/')
+    // Loop through all .row.property and if the element has a .property-value ul li with text "Overridden property value", check the label and title of the .property-label for this row
+    cy.get('.row.property').each($row => {
+      cy.wrap($row).find('.property-value ul li').each($li => {
+        if ($li.text().includes('Overridden property value')) {
+          cy.wrap($row).find('.property-label h3').eq(0).invoke('text').should('include', 'Vocabulary Property')
+          cy.wrap($row).find('.property-label h3').eq(0).should('have.attr', 'data-title').and('contain', 'Vocabulary Property description')
+        }
+      })
+    })
+  })
   it('Clicking on hierarchy entries performs partial page load', () => {
     cy.visit('/test/en') // go to the "Test ontology" home page
 
@@ -49,7 +72,7 @@ describe('Vocabulary home page', () => {
     cy.get('#tab-hierarchy').contains('a', 'Fish').click()
 
     // check the concept prefLabel
-    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'Fish')
+    cy.get('#concept-heading h2', {'timeout': 15000}).invoke('text').should('equal', 'Fish')
 
     // check that the SKOSMOS object matches the newly loaded concept
     cy.window().then((win) => {
@@ -63,7 +86,7 @@ describe('Vocabulary home page', () => {
     cy.get('#concept-mappings i.fa-spinner', {'timeout': 15000}).should('not.exist')
 
     // check the second mapping property name
-    cy.get('.prop-mapping h2', {'timeout': 15000}).eq(0).contains('Exactly matching concepts')
+    cy.get('.prop-mapping h3', {'timeout': 15000}).eq(0).contains('Exactly matching concepts')
     // check the second mapping property values
     cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).find('a').invoke('text').should('match', /^(fish|wd:Q152)$/)
     cy.get('.prop-mapping').eq(0).find('.prop-mapping-label').eq(0).find('a').should('have.attr', 'href', 'http://www.wikidata.org/entity/Q152')
@@ -180,9 +203,9 @@ describe('Vocabulary home page', () => {
         cy.get('#term-stats')
           .contains('tr', language)
           .within(() => {
-            cy.get('td').eq(1).should('have.text', prefLabel)
-            cy.get('td').eq(2).should('have.text', altLabel)
-            cy.get('td').eq(3).should('have.text', hiddenLabel)
+            cy.get('td').eq(1).find('span').eq(1).should('have.text', prefLabel)
+            cy.get('td').eq(2).find('span').eq(1).should('have.text', altLabel)
+            cy.get('td').eq(3).find('span').eq(1).should('have.text', hiddenLabel)
           })
       })
       
@@ -224,9 +247,9 @@ describe('Vocabulary home page', () => {
         cy.get('#term-stats')
           .contains('tr', language)
           .within(() => {
-            cy.get('td').eq(1).should('have.text', prefLabel)
-            cy.get('td').eq(2).should('have.text', altLabel)
-            cy.get('td').eq(3).should('have.text', hiddenLabel)
+            cy.get('td').eq(1).find('span').eq(1).should('have.text', prefLabel)
+            cy.get('td').eq(2).find('span').eq(1).should('have.text', altLabel)
+            cy.get('td').eq(3).find('span').eq(1).should('have.text', hiddenLabel)
           })
       })
       

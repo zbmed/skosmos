@@ -9,14 +9,12 @@ function startHierarchyApp () {
         loadingHierarchy: true,
         loadingChildren: [],
         selectedConcept: '',
-        listStyle: {}
+        listStyle: {},
+        visibleConceptCount: 0
       }
     },
     computed: {
-      openAriaMessage () {
-        return $t('Open')
-      },
-      goToTheConceptPageAriaMessage () {
+      toConceptPageAriaMessage () {
         return $t('Go to the concept page')
       }
     },
@@ -53,61 +51,76 @@ function startHierarchyApp () {
           this.loadTopConcepts()
         }
       },
-      loadTopConcepts () {
+      async loadTopConcepts () {
         this.loadingHierarchy = true
         if (window.SKOSMOS.showConceptSchemesInHierarchy) {
           // if concept schemes are shown in hierarchy, fetch them from API and set them as top concepts in hierarchy
           const params = new URLSearchParams({ lang: window.SKOSMOS.content_lang })
-          fetch(`rest/v1/${window.SKOSMOS.vocab}/?${params}`)
-            .then(data => {
-              return data.json()
-            })
-            .then(data => {
-              this.hierarchy = []
-
-              for (const c of data.conceptschemes.sort((a, b) => this.compareConcepts(a, b))) {
-                this.hierarchy.push({ uri: c.uri, label: c.title || c.label, hasChildren: true, children: [], isOpen: false, notation: undefined, isScheme: true })
-              }
-
+          try {
+            const res = await fetch(`rest/v1/${window.SKOSMOS.vocab}/?${params}`)
+            if (!res.ok) {
               this.loadingHierarchy = false
-            })
+              return
+            }
+            const data = await res.json()
+            this.hierarchy = []
+
+            for (const c of data.conceptschemes.sort((a, b) => this.compareConcepts(a, b))) {
+              this.hierarchy.push({ uri: c.uri, label: c.title || c.label, hasChildren: true, children: [], isOpen: false, notation: undefined, isScheme: true })
+            }
+          } catch (e) {
+            console.error(e)
+          } finally {
+            this.addIndicesToHierarchy()
+            this.loadingHierarchy = false
+          }
         } else {
           // otherwise, fetch top concepts
           const params = new URLSearchParams({ lang: window.SKOSMOS.content_lang })
-          fetch(`rest/v1/${window.SKOSMOS.vocab}/topConcepts/?${params}`)
-            .then(data => {
-              return data.json()
-            })
-            .then(data => {
-              this.hierarchy = []
-
-              for (const c of data.topconcepts.sort((a, b) => this.compareConcepts(a, b))) {
-                this.hierarchy.push(this.createConceptNode(c))
-              }
-
+          try {
+            const res = await fetch(`rest/v1/${window.SKOSMOS.vocab}/topConcepts/?${params}`)
+            if (!res.ok) {
               this.loadingHierarchy = false
-            })
+              return
+            }
+            const data = await res.json()
+            this.hierarchy = []
+
+            for (const c of data.topconcepts.sort((a, b) => this.compareConcepts(a, b))) {
+              this.hierarchy.push(this.createConceptNode(c))
+            }
+          } catch (e) {
+            console.error(e)
+          } finally {
+            this.addIndicesToHierarchy()
+            this.loadingHierarchy = false
+          }
         }
       },
       async loadConceptHierarchy () {
         this.loadingHierarchy = true
         this.hierarchy = []
 
-        // if concept schemes are shown in hierarchy, add them to the root of the hierarchy tree
-        if (window.SKOSMOS.showConceptSchemesInHierarchy) {
-          await this.loadConceptSchemes()
-        }
+        try {
+          // if concept schemes are shown in hierarchy, add them to the root of the hierarchy tree
+          if (window.SKOSMOS.showConceptSchemesInHierarchy) {
+            await this.loadConceptSchemes()
+          }
 
-        if (this.hierarchy.some(s => s.uri === window.SKOSMOS.uri)) {
-          // if we are on a page for a concept scheme, fetch its top concepts
-          await this.loadTopConceptsForConceptScheme()
-        } else {
-          // otherwise, fetch hierarchy tree for selected concept
-          await this.loadHierarchyForConcept()
+          if (this.hierarchy.some(s => s.uri === window.SKOSMOS.uri)) {
+            // if we are on a page for a concept scheme, fetch its top concepts
+            await this.loadTopConceptsForConceptScheme()
+          } else {
+            // otherwise, fetch hierarchy tree for selected concept
+            await this.loadHierarchyForConcept()
+          }
+        } catch (e) {
+          console.error(e)
+        } finally {
+          this.loadingHierarchy = false
+          this.addIndicesToHierarchy()
+          this.selectedConcept = window.SKOSMOS.uri
         }
-
-        this.loadingHierarchy = false
-        this.selectedConcept = window.SKOSMOS.uri
       },
       loadChildren (concept) {
         // load children only if concept has children but they have not been loaded yet
@@ -127,6 +140,7 @@ function startHierarchyApp () {
                 for (const c of data.topconcepts.sort((a, b) => this.compareConcepts(a, b))) {
                   concept.children.push(this.createConceptNode(c))
                 }
+                this.addIndicesToHierarchy()
                 this.loadingChildren = this.loadingChildren.filter(x => x !== concept)
               })
           } else {
@@ -143,14 +157,21 @@ function startHierarchyApp () {
                 for (const c of data.narrower.sort((a, b) => this.compareConcepts(a, b))) {
                   concept.children.push(this.createConceptNode(c))
                 }
+                this.addIndicesToHierarchy()
                 this.loadingChildren = this.loadingChildren.filter(x => x !== concept)
               })
           }
+        } else if (concept.children.length > 0) {
+          // If the concept already has children loaded, update indices in hierarchy
+          this.addIndicesToHierarchy()
         }
       },
       async loadConceptSchemes () {
         const params = new URLSearchParams({ lang: window.SKOSMOS.content_lang })
         const res = await fetch(`rest/v1/${window.SKOSMOS.vocab}/?${params}`)
+        if (!res.ok) {
+          return
+        }
         const data = await res.json()
 
         for (const s of data.conceptschemes.sort((a, b) => this.compareConcepts(a, b))) {
@@ -164,6 +185,9 @@ function startHierarchyApp () {
           lang: window.SKOSMOS.content_lang
         })
         const res = await fetch(`rest/v1/${window.SKOSMOS.vocab}/topConcepts?${params}`)
+        if (!res.ok) {
+          return
+        }
         const data = await res.json()
 
         // find selected scheme in hierarchy
@@ -179,6 +203,9 @@ function startHierarchyApp () {
           lang: window.SKOSMOS.content_lang
         })
         const res = await fetch(`rest/v1/${window.SKOSMOS.vocab}/hierarchy/?${params}`)
+        if (!res.ok) {
+          return
+        }
         const data = await res.json()
 
         // transform broaderTransitive to an array and sort it
@@ -270,6 +297,30 @@ function startHierarchyApp () {
           }
         }
       },
+      addIndicesToHierarchy () {
+        // Adds a unique index to each concept that is visible in DOM after hierarchy is updated
+        let counter = 0
+
+        const traverse = (nodes, parentIsOpen) => {
+          for (const node of nodes) {
+            // Assign index only if parent is open
+            if (parentIsOpen) {
+              node.index = counter
+              counter++
+            } else {
+              delete node.index
+            }
+
+            if (node.children.length > 0) {
+              traverse(node.children, node.isOpen && parentIsOpen)
+            }
+          }
+        }
+
+        traverse(this.hierarchy, true)
+
+        this.visibleConceptCount = counter
+      },
       openContainingScheme () {
         const containsConcept = (node) => {
           if (node.uri === window.SKOSMOS.uri) return true
@@ -327,32 +378,30 @@ function startHierarchyApp () {
         strA = strA || a.label || a.prefLabel || a.title || ''
         strB = strB || b.label || b.prefLabel || b.title || ''
 
-        // Set language and options
-        const lang = window.SKOSMOS.content_lang || window.SKOSMOS.lang
-        const options = {
-          numeric: window.SKOSMOS.sortByNotation === 'natural', // Set numeric to true if sort should be natural
-          sensitivity: 'variant' // Strings that differ in base letters, diacritic marks, or case compare as unequal
-        }
-
-        const result = strA.localeCompare(strB, lang, options)
+        const result = this.$collator.compare(strA, strB)
         if (result !== 0) {
           return result
         } else {
           // fall back to non-numeric sort to ensure a consistent order
-          return strA.localeCompare(strB, lang, { sensitivity: 'variant' })
+          return this.$fallbackCollator.compare(strA, strB)
         }
       }
     },
     template: `
-      <div v-click-tab-hierarchy="handleClickHierarchyEvent" v-resize-window="setListStyle">
-        <div id="hierarchy-list" class="sidebar-list p-0" :style="listStyle">
-          <ul class="list-group" v-if="!loadingHierarchy">
+      <div
+        v-click-tab-hierarchy="handleClickHierarchyEvent"
+        v-toggle-sidebar="setListStyle"
+        v-resize-window="setListStyle"
+        v-window-popstate="() => selectedConcept = ''"
+      >
+        <div id="hierarchy-list" class="sidebar-list p-0" tabindex="-1" :style="listStyle">
+          <ul class="list-group" aria-labelledby="hierarchy" role="tree" v-if="!loadingHierarchy">
             <tab-hier-wrapper
               :hierarchy="hierarchy"
               :selectedConcept="selectedConcept"
               :loadingChildren="loadingChildren"
-              :openAriaMessage="openAriaMessage"
-              :goToTheConceptPageAriaMessage="goToTheConceptPageAriaMessage"
+              :toConceptPageAriaMessage="toConceptPageAriaMessage"
+              :visibleConceptCount="visibleConceptCount"
               @load-children="loadChildren($event)"
               @select-concept="selectedConcept = $event"
             ></tab-hier-wrapper>
@@ -371,10 +420,23 @@ function startHierarchyApp () {
       el.clickTabEvent = event => {
         binding.value() // calling the method given as the attribute value (handleClickHierarchyEvent)
       }
-      document.querySelector('#hierarchy').addEventListener('click', el.clickTabEvent) // registering an event listener on clicks on the hierarchy nav-item element
+      document.querySelector('#hierarchy').addEventListener('shown.bs.tab', el.clickTabEvent) // registering an event listener on bootstrap's tab shown event on the hierarchy nav-item element
     },
     unmounted: el => {
-      document.querySelector('#hierarchy').removeEventListener('click', el.clickTabEvent)
+      document.querySelector('#hierarchy').removeEventListener('shown.bs.tab', el.clickTabEvent)
+    }
+  })
+
+  /* Custom directive used to add an event listener on clicks on the sidebar-collapse-btn element on mobile */
+  tabHierApp.directive('toggle-sidebar', {
+    beforeMount: (el, binding) => {
+      el.clickTabEvent = event => {
+        binding.value() // calling the method given as the attribute value (seListStyle)
+      }
+      document.querySelector('#sidebar-collapse-btn').addEventListener('sidebar-toggled', el.clickTabEvent) // registering an event listener on toggling sidebar on mobile
+    },
+    unmounted: el => {
+      document.querySelector('#sidebar-collapse-btn').addEventListener('sidebar-toggled', el.clickTabEvent)
     }
   })
 
@@ -391,9 +453,27 @@ function startHierarchyApp () {
     }
   })
 
+  /* Custom directive used to add an event listener on popstate events */
+  tabHierApp.directive('window-popstate', {
+    beforeMount: (el, binding) => {
+      el.windowPopstateEvent = event => {
+        binding.value() // calling the method given as the attribute value
+      }
+      window.addEventListener('popstate', el.windowPopstateEvent) // registering an event listener on popstate events
+    },
+    unmounted: el => {
+      window.removeEventListener('popstate', el.windowPopstateEvent)
+    }
+  })
+
   tabHierApp.component('tab-hier-wrapper', {
-    props: ['hierarchy', 'selectedConcept', 'loadingChildren', 'openAriaMessage', 'goToTheConceptPageAriaMessage'],
+    props: ['hierarchy', 'selectedConcept', 'loadingChildren', 'toConceptPageAriaMessage', 'visibleConceptCount'],
     emits: ['loadChildren', 'selectConcept'],
+    data () {
+      return {
+        conceptInFocus: 0
+      }
+    },
     mounted () {
       // scroll automatically to selected concept after the whole hierarchy tree has been mounted
       if (this.selectedConcept) {
@@ -401,7 +481,7 @@ function startHierarchyApp () {
         const list = document.querySelector('#hierarchy-list')
 
         // distances to the top of the page
-        const selectedTop = selected.getBoundingClientRect().top
+        const selectedTop = selected?.getBoundingClientRect().top
         const listTop = list.getBoundingClientRect().top
 
         // height of the visible portion of the list element
@@ -421,6 +501,33 @@ function startHierarchyApp () {
       },
       selectConcept (concept) {
         this.$emit('selectConcept', concept)
+      },
+      handleKeydownEvent (e) {
+        if (e.key === ' ' || e.key === 'Enter') {
+          // Click on link currently in focus
+          e.preventDefault()
+          document.querySelector('#hierarchy-concept' + this.conceptInFocus + ' a').click()
+        } else if (e.key === 'ArrowDown') {
+          // On last element move focus to first list item, otherwise next list item
+          e.preventDefault()
+          this.moveFocus((this.conceptInFocus + 1) % this.visibleConceptCount)
+        } else if (e.key === 'ArrowUp') {
+          // On first element move focus to last list item, otherwise to previous list item
+          e.preventDefault()
+          this.moveFocus(this.conceptInFocus === 0 ? this.visibleConceptCount - 1 : this.conceptInFocus - 1)
+        } else if (e.key === 'Home') {
+          // Move focus to first list item
+          e.preventDefault()
+          this.moveFocus(0)
+        } else if (e.key === 'End') {
+          // Move focus to last list item
+          e.preventDefault()
+          this.moveFocus(this.visibleConceptCount - 1)
+        }
+      },
+      moveFocus (i) {
+        this.conceptInFocus = i
+        document.getElementById('hierarchy-concept' + this.conceptInFocus).focus()
       }
     },
     template: `
@@ -431,40 +538,98 @@ function startHierarchyApp () {
           :isTopConcept="true"
           :isLast="i == hierarchy.length - 1"
           :loadingChildren="loadingChildren"
-          :openAriaMessage="openAriaMessage"
-          :goToTheConceptPageAriaMessage="goToTheConceptPageAriaMessage"
+          :toConceptPageAriaMessage="toConceptPageAriaMessage"
+          :conceptInFocus="conceptInFocus"
           @load-children="loadChildren($event)"
           @select-concept="selectConcept($event)"
+          @link-keydown="handleKeydownEvent($event)"
+          @move-focus="moveFocus($event)"
         ></tab-hier>
       </template>
     `
   })
 
   tabHierApp.component('tab-hier', {
-    props: ['concept', 'selectedConcept', 'isTopConcept', 'isLast', 'loadingChildren', 'openAriaMessage', 'goToTheConceptPageAriaMessage'],
-    emits: ['loadChildren', 'selectConcept'],
+    props: [
+      'concept',
+      'selectedConcept',
+      'isTopConcept',
+      'isLast',
+      'loadingChildren',
+      'toConceptPageAriaMessage',
+      'conceptInFocus'
+    ],
+    emits: ['loadChildren', 'selectConcept', 'linkKeydown', 'closeParent', 'moveFocus'],
     inject: ['partialPageLoad', 'getConceptURL', 'showNotation'],
     methods: {
       handleClickOpenEvent (concept) {
         concept.isOpen = !concept.isOpen
         this.$emit('loadChildren', concept)
+        this.$emit('moveFocus', concept.index)
       },
       handleClickConceptEvent (event, concept) {
         concept.isOpen = true
         this.$emit('loadChildren', concept)
         this.$emit('selectConcept', concept.uri)
+        this.$emit('moveFocus', concept.index)
         this.partialPageLoad(event, this.getConceptURL(concept.uri))
+      },
+      handleKeydownEvent (e, c) {
+        // Prevent event from bubbling up to ancestors
+        if (e.currentTarget !== e.target) {
+          return
+        }
+
+        if (e.key === 'ArrowRight') {
+          if (!c.isOpen && c.hasChildren) {
+            // If right arrow key is pressed on a closed concept, open it
+            c.isOpen = true
+            this.$emit('loadChildren', c)
+          } else if (c.children.length > 0) {
+            // If right arrow is pressed on a open concept, move focus to first child
+            this.$emit('moveFocus', c.index + 1)
+          }
+        } else if (e.key === 'ArrowLeft' && c.isOpen) {
+          // If left arrow key is pressed on an open concept, close it
+          c.isOpen = false
+          this.$emit('loadChildren', c)
+        } else if (e.key === 'ArrowLeft') {
+          // If left arrow key is pressed on a closed concept, close its parent
+          this.$emit('closeParent')
+        } else {
+          // Otherwise, deal with other key press types in tab-hier-wrapper
+          this.$emit('linkKeydown', e)
+        }
+      },
+      handleCloseParentEvent () {
+        // Close this concept when left arrow key is pressed on a closed child
+        this.concept.isOpen = false
+        this.$emit('loadChildren', this.concept)
+        this.$emit('moveFocus', this.concept.index)
       },
       loadChildrenRecursive (concept) {
         this.$emit('loadChildren', concept)
       },
       selectConceptRecursive (concept) {
         this.$emit('selectConcept', concept)
+      },
+      linkKeydownRecursive (event) {
+        this.$emit('linkKeydown', event)
+      },
+      moveFocusRecursive (index) {
+        this.$emit('moveFocus', index)
       }
     },
     template: `
-      <li class="list-group-item p-0" :class="{ 'top-concept': isTopConcept }">
-        <button type="button" class="hierarchy-button btn btn-primary" :aria-label="openAriaMessage" 
+      <li class="list-group-item p-0" role="treeitem"
+        :class="{ 'top-concept': isTopConcept }"
+        :tabindex="concept.index === conceptInFocus ? 0 : -1"
+        :id="'hierarchy-concept' + concept.index"
+        :aria-expanded="concept.hasChildren ? concept.isOpen : null"
+        :aria-selected="concept.uri === selectedConcept || null"
+        @keydown="handleKeydownEvent($event, concept)"
+      >
+        <button type="button" class="hierarchy-button btn btn-primary" aria-hidden="true" tabindex="-1"
           :class="{ 'open': concept.isOpen }"
           v-if="concept.hasChildren"
           @click="handleClickOpenEvent(concept)"
@@ -478,27 +643,31 @@ function startHierarchyApp () {
           </template>
         </button>
         <span class="concept-label" :class="{ 'last': isLast }">
-          <a :class="{ 'selected': selectedConcept === concept.uri }"
+          <a tabindex="-1"
+            :class="{ 'selected': selectedConcept === concept.uri }" 
             :href="getConceptURL(concept.uri)"
             @click="handleClickConceptEvent($event, concept)"
-            :aria-label="goToTheConceptPageAriaMessage"
           >
             <span v-if="showNotation && concept.notation" class="concept-notation">{{ concept.notation }} </span>
             {{ concept.label }}
+            <span class="visually-hidden">{{ toConceptPageAriaMessage }}</span>
           </a>
         </span>
-        <ul class="list-group ps-3" v-if="concept.children.length !== 0 && concept.isOpen">
+        <ul v-if="concept.children.length !== 0 && concept.isOpen" class="list-group ps-3" role="group">
           <template v-for="(c, i) in concept.children">
             <tab-hier
               :concept="c"
               :selectedConcept="selectedConcept"
-              :openAriaMessage="openAriaMessage"
-              :goToTheConceptPageAriaMessage="goToTheConceptPageAriaMessage"
+              :toConceptPageAriaMessage="toConceptPageAriaMessage"
               :isTopConcept="false"
               :isLast="i == concept.children.length - 1"
               :loadingChildren="loadingChildren"
+              :conceptInFocus="conceptInFocus"
               @load-children="loadChildrenRecursive($event)"
               @select-concept="selectConceptRecursive($event)"
+              @link-keydown="linkKeydownRecursive($event)"
+              @close-parent="handleCloseParentEvent()"
+              @move-focus="moveFocusRecursive($event)"
             ></tab-hier>
           </template>
         </ul>
@@ -506,9 +675,44 @@ function startHierarchyApp () {
     `
   })
 
-  if (document.getElementById('tab-hierarchy')) {
-    tabHierApp.mount('#tab-hierarchy')
-  }
+  // initialize the collators needed by the app
+  tabHierApp.config.globalProperties.$collator = new Intl.Collator(
+    window.SKOSMOS.content_lang || window.SKOSMOS.lang,
+    {
+      sensitivity: 'variant',
+      numeric: window.SKOSMOS.sortByNotation === 'natural'
+    }
+  )
+  tabHierApp.config.globalProperties.$fallbackCollator = new Intl.Collator(
+    window.SKOSMOS.content_lang || window.SKOSMOS.lang,
+    {
+      sensitivity: 'variant',
+      numeric: false
+    }
+  )
+
+  tabHierApp.mount('#tab-hierarchy')
 }
 
-onTranslationReady(startHierarchyApp)
+async function initializeHierarchyApp () {
+  try {
+    // concept labels are sorted in the content language, so request
+    // readiness for the content locale
+    await window.getIntlCollatorReady(window.SKOSMOS.content_lang || window.SKOSMOS.lang)
+  } catch (e) {
+    console.error('Intl.Collator polyfill failed to load, continuing with native collator:', e)
+  }
+
+  startHierarchyApp()
+}
+
+onTranslationReady(function () {
+  if (document.getElementById('tab-hierarchy')) {
+    if (typeof window.getIntlCollatorReady === 'function') {
+      initializeHierarchyApp()
+    } else {
+      // wait for the polyfill promise to be initialized
+      document.addEventListener('intlCollatorPromiseReady', initializeHierarchyApp)
+    }
+  }
+})

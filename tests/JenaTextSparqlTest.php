@@ -11,9 +11,6 @@ class JenaTextSparqlTest extends PHPUnit\Framework\TestCase
 
     protected function setUp(): void
     {
-        putenv("LANGUAGE=en_GB.utf8");
-        putenv("LC_ALL=en_GB.utf8");
-        setlocale(LC_ALL, 'en_GB.utf8');
         $this->model = new Model('../../tests/jenatestconfig.ttl');
         $this->vocab = $this->model->getVocabulary('test');
         $this->graph = $this->vocab->getGraph();
@@ -372,7 +369,6 @@ class JenaTextSparqlTest extends PHPUnit\Framework\TestCase
      */
     public function testQueryConceptsAlphabeticalOrderBy()
     {
-        $this->markTestSkipped("disabled because ARQ collation doesn't work in dockerized Fuseki (Jena issue #1998)");
         $vocab = $this->model->getVocabulary('collation');
         $graph = $vocab->getGraph();
         $sparql = new JenaTextSparql($this->endpoint, $graph, $this->model);

@@ -1,48 +1,70 @@
-/* global Vue, $t, onTranslationReady */
+/* global Vue, bootstrap, $t, onTranslationReady, getConceptURL */
 
 function startVocabSearchApp () {
   const vocabSearch = Vue.createApp({
     data () {
       return {
         selectedLanguage: null,
-        searchTerm: null,
-        searchCounter: null,
+        searchTerm: '',
+        searchCounter: 0, // used for matching the query and the response in case there are many responses
         renderedResultsList: [],
         languageStrings: null,
-        showDropdown: false,
+        uriPrefixes: {},
+        showAutoCompleteDropdown: false,
+        focusedLangIndex: -1,
         showNotation: null
       }
     },
     computed: {
-      searchPlaceholder () {
-        return $t('Search...')
-      },
-      anyLanguages () {
-        return $t('Any language')
+      allLanguages () {
+        return $t('all languages')
       },
       noResults () {
         return $t('No results')
       },
-      selectSearchLanguageAriaMessage () {
-        return $t('Select search language')
+      contentLanguageMessage () {
+        return $t('Content language')
       },
-      textInputWithDropdownButtonAriaMessage () {
-        return $t('Text input with dropdown button')
+      searchLabel () {
+        return $t('Enter search term')
       },
-      searchAriaMessage () {
+      searchButtonAriaMessage () {
         return $t('Search')
+      },
+      clearSearchAriaMessage () {
+        return $t('Clear search field')
       }
     },
     mounted () {
       this.selectedLanguage = this.parseSearchLang()
-      this.searchCounter = 0 // used for matching the query and the response in case there are many responses
+      this.searchTerm = window.SKOSMOS.search_query || ''
       this.languageStrings = this.formatLanguages()
       this.renderedResultsList = []
+      this.uriPrefixes = {}
       this.showNotation = window.SKOSMOS.showNotation
+
+      this.langMenuKeydownHandler = (e) => {
+        // Bypass Bootstrap event listener on window level
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+          if (e.target.closest('#language-selector') && e.target.className === 'dropdown-item') {
+            e.stopImmediatePropagation()
+            this.onLangMenuKeydown(e)
+          }
+        }
+      }
+      window.addEventListener('keydown', this.langMenuKeydownHandler, true)
+    },
+    beforeUnmount () {
+      window.removeEventListener('keydown', this.langMenuKeydownHandler, true)
     },
     methods: {
-      autoComplete () {
+      autoComplete (event) {
         const delayMs = 300
+
+        /* Reading search term from input element instead of relying on v-model
+           because mobile browsers don't always update the value correctly */
+        this.searchTerm = event.target.value
+        this.searchCounter += 1
 
         // when new autocomplete is fired, empty the previous result
         this.renderedResultsList = []
@@ -69,14 +91,15 @@ function startVocabSearchApp () {
           .then(data => {
             if (mySearchCounter === this.searchCounter) {
               this.renderedResultsList = data.results // update results (update cache if it is implemented)
+              this.uriPrefixes = data['@context']
               this.renderResults() // render after the fetch has finished
             }
           })
       },
       formatLanguages () {
         const languages = window.SKOSMOS.contentLanguages
-        const anyLanguagesEntry = { all: this.anyLanguages }
-        return { ...languages, ...anyLanguagesEntry }
+        const allLanguagesEntry = { all: this.allLanguages }
+        return { ...languages, ...allLanguagesEntry }
       },
       formatSearchTerm () {
         if (this.searchTerm.includes('*')) { return this.searchTerm }
@@ -130,7 +153,17 @@ function startVocabSearchApp () {
       },
       renderType (typeUri) {
         const label = window.SKOSMOS.types[typeUri]
-        return (label) || typeUri
+        if (label) return label
+
+        const [prefix, local] = typeUri.split(':')
+        const iriBase = this.uriPrefixes[prefix]
+
+        if (iriBase) {
+          const iri = iriBase + local
+          return window.SKOSMOS.types[iri] || typeUri
+        }
+
+        return typeUri
       },
       /*
       * renderResults is used when the search string has been indexed in the cache
@@ -160,12 +193,7 @@ function startVocabSearchApp () {
             }
           }
           if ('uri' in result) { // create relative Skosmos page URL from the search result URI
-            result.pageUrl = window.SKOSMOS.vocab + '/' + window.SKOSMOS.lang + '/page?'
-            const urlParams = new URLSearchParams({ uri: result.uri })
-            if (this.selectedLanguage !== window.SKOSMOS.lang) { // add content language parameter
-              urlParams.append('clang', this.selectedLanguage)
-            }
-            result.pageUrl += urlParams.toString()
+            result.pageUrl = getConceptURL(result.uri)
           }
           // render search result renderedTypes
           if (result.type.length > 1) { // remove the type for SKOS concepts if the result has more than one type
@@ -185,8 +213,7 @@ function startVocabSearchApp () {
         this.showAutoComplete()
       },
       hideAutoComplete () {
-        this.showDropdown = false
-        this.$forceUpdate()
+        this.showAutoCompleteDropdown = false
       },
       gotoSearchPage () {
         if (!this.searchTerm) return
@@ -216,84 +243,286 @@ function startVocabSearchApp () {
         window.location.search = params.toString()
       },
       resetSearchTermAndHideDropdown () {
+        // cancel any pending autocomplete request
+        clearTimeout(this._timerId)
+        this.searchCounter += 1
         this.searchTerm = ''
         this.renderedResultsList = []
         this.hideAutoComplete()
+        // prevent the input focus handler from immediately re-showing the list
+        this._skipShowOnFocus = true
+
+        this.$nextTick(() => {
+          this.$refs.searchInputField.focus()
+        })
+      },
+      onSearchFieldFocus () {
+        if (this._skipShowOnFocus) {
+          this._skipShowOnFocus = false
+          return
+        }
+        this.showAutoComplete()
       },
       /*
       * Show the existing autocomplete list if it was hidden by onClickOutside()
       */
       showAutoComplete () {
-        this.showDropdown = true
-        this.$forceUpdate()
+        this.showAutoCompleteDropdown = true
+      },
+      focusFirstResult () {
+        const firstLink = this.$el?.querySelector('#search-autocomplete-results a')
+        if (firstLink) firstLink.focus()
+      },
+      /*
+      * Focus the top-level focusable element before (-1) or after (1) the
+      * search field, skipping the autocomplete result links.
+      * Note: must stay in sync with the native tab order of the wrapper,
+      * since the Tab key on the search input itself relies on that order.
+      */
+      focusSearchFieldSibling (direction) {
+        const input = this.$refs.searchInputField
+        const resultsList = this.$el?.querySelector('#search-autocomplete-results')
+        const focusables = Array.from(this.$el.querySelectorAll('input, button, a[href]'))
+          // offsetParent excludes items in the hidden language dropdown menu
+          .filter(el => !el.disabled && el.offsetParent !== null && !(resultsList && resultsList.contains(el)))
+        const index = focusables.indexOf(input)
+        const target = focusables[index + direction]
+        if (target) target.focus()
+      },
+      onSearchFieldKeydown (event) {
+        switch (event.key) {
+          case 'ArrowDown':
+            event.preventDefault()
+            // re-open the list if it was hidden, then move focus to the first result
+            this.showAutoComplete()
+            this.$nextTick(() => this.focusFirstResult())
+            break
+          case 'ArrowUp':
+            this.hideAutoComplete()
+            break
+          case 'Escape':
+            event.preventDefault()
+            this.hideAutoComplete()
+            break
+          case 'Tab':
+            // close the list but let the focus move to the next element
+            this.hideAutoComplete()
+            break
+        }
+      },
+      onLangMenuKeydown (event) {
+        const items = this.$refs.langMenu.querySelectorAll('[role="radio"]')
+        switch (event.key) {
+          case 'ArrowDown': {
+            event.preventDefault()
+            if (this.focusedLangIndex === items.length) {
+              this.focusedLangIndex = 0
+              items[this.focusedLangIndex].focus()
+            } else {
+              this.focusedLangIndex = (this.focusedLangIndex + 1) % items.length
+              items[this.focusedLangIndex].focus()
+            }
+            break
+          }
+          case 'ArrowUp': {
+            event.preventDefault()
+            if (this.focusedLangIndex === 0) {
+              this.closeLangMenu()
+              break
+            }
+            this.focusedLangIndex =
+              (this.focusedLangIndex - 1 + items.length) % items.length
+            items[this.focusedLangIndex].focus()
+            break
+          }
+          case 'Enter':
+          case ' ': {
+            event.preventDefault()
+            if (event.target.classList.contains('dropdown-toggle')) {
+              this.openLangMenu()
+            } else {
+              this.changeContentLangAndReload(Object.keys(this.languageStrings)[this.focusedLangIndex])
+            }
+            break
+          }
+          case 'Escape': {
+            this.closeLangMenu()
+            break
+          }
+        }
+      },
+      onResultsKeydown (e) {
+        const items = Array.from(e.currentTarget.querySelectorAll('a'))
+        if (!items.length) return
+
+        const currentIndex = items.indexOf(document.activeElement)
+
+        const focusAt = (newIndex) => {
+          const i = (newIndex + items.length) % items.length
+          items[i].focus()
+          // focus() alone does not scroll a partially visible item into full
+          // view, so scroll the list container as needed
+          const list = e.currentTarget
+          const itemRect = items[i].getBoundingClientRect()
+          const listRect = list.getBoundingClientRect()
+          if (itemRect.bottom > listRect.bottom) {
+            list.scrollTop += itemRect.bottom - listRect.bottom
+          } else if (itemRect.top < listRect.top) {
+            list.scrollTop += itemRect.top - listRect.top
+          }
+        }
+
+        switch (e.key) {
+          case 'ArrowDown':
+            e.preventDefault()
+            focusAt(currentIndex < 0 ? 0 : currentIndex + 1)
+            break
+
+          case 'ArrowUp':
+            e.preventDefault()
+            if (currentIndex <= 0) {
+              // move focus back to the search input
+              this.$refs.searchInputField.focus()
+            } else {
+              focusAt(currentIndex - 1)
+            }
+            break
+
+          case 'Home':
+            e.preventDefault()
+            focusAt(0)
+            break
+
+          case 'End':
+            e.preventDefault()
+            focusAt(items.length - 1)
+            break
+
+          case 'Escape':
+            e.preventDefault()
+            this.hideAutoComplete()
+            // Invariant: whenever the input is focused programmatically, set
+            // _skipShowOnFocus first so onSearchFieldFocus does not re-show the list
+            this._skipShowOnFocus = true
+            this.$refs.searchInputField.focus()
+            break
+
+          case 'Tab': {
+            // leave the list entirely: jump to the previous/next top-level
+            // focusable element around the search field (skipping the result
+            // links and, for Shift-Tab, the search field itself)
+            e.preventDefault()
+            this.hideAutoComplete()
+            this.focusSearchFieldSibling(e.shiftKey ? -1 : 1)
+            break
+          }
+
+          case 'Enter':
+            // activate the focused result explicitly (also works when the
+            // event is synthesized by assistive technology or tests)
+            if (currentIndex < 0) break
+            e.preventDefault()
+            items[currentIndex].click()
+            break
+        }
+      },
+      openLangMenu () {
+        const btn = this.$refs.langButton
+        const dropdown = bootstrap.Dropdown.getOrCreateInstance(btn)
+        dropdown.show()
+
+        this.$nextTick(() => {
+          const items = this.$refs.langMenu.querySelectorAll('[role="menuitemradio"]')
+
+          this.focusedLangIndex = Math.max(
+            0,
+            Object.keys(this.languageStrings).indexOf(this.selectedLanguage)
+          )
+
+          items[this.focusedLangIndex]?.focus()
+        })
+      },
+
+      closeLangMenu () {
+        const btn = this.$refs.langButton
+        const dropdown = bootstrap.Dropdown.getOrCreateInstance(btn)
+        dropdown.hide()
+
+        this.focusedLangIndex = -1
+        this.$nextTick(() => {
+          this.$refs.langButton.focus()
+        })
       }
     },
     template: `
       <div class="input-group ps-xl-2 flex-nowrap" id="search-wrapper">
 
-      <div class="dropdown" id="language-selector">
-        <button class="btn btn-outline-secondary dropdown-toggle"
-          role="button"
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-          :aria-label="selectSearchLanguageAriaMessage"
-          v-if="languageStrings">
-          {{ languageStrings[selectedLanguage] }}
-          <i class="fa-solid fa-chevron-down"></i>
-        </button>
-        <ul class="dropdown-menu" id="language-list" role="menu">
-          <li v-for="(value, key) in languageStrings" :key="key" role="none">
-            <a
-              class="dropdown-item"
-              :value="key"
-              @click="changeContentLangAndReload(key)"
-              @keydown.enter="changeContentLangAndReload(key)"
-              role="menuitem"
-              tabindex=0 >
-              {{ value }}
-            </a>
-          </li>
-        </ul>
-      </div>
+        <div class="search-field-group">
+          <span id="content-language-label" class="search-field-label">{{ contentLanguageMessage }}</span>
+          <div class="dropdown" id="language-selector">
+            <button
+              type="button"
+              ref="langButton"
+              class="btn btn-outline-secondary dropdown-toggle"
+              data-bs-toggle="dropdown"
+              @keydown="onLangMenuKeydown"
+              aria-expanded="false"
+              aria-controls="language-list"
+              aria-labelledby="content-language-label content-language-current">
+              <span id="content-language-current" v-if="selectedLanguage && languageStrings[selectedLanguage]">
+                {{ languageStrings[selectedLanguage] }}
+              </span>
+              <i class="chevron fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </button>
 
-        <span id="headerbar-search" class="dropdown">
-          <input type="search"
-            class="form-control"
-            id="search-field"
-            autocomplete="off"
-            data-bs-toggle=""
-            :aria-label="textInputWithDropdownButtonAriaMessage"
-            :placeholder="searchPlaceholder"
-            v-click-outside="hideAutoComplete"
-            v-model="searchTerm"
-            @input="autoComplete()"
-            @keyup.enter="gotoSearchPage()"
-            @click="showAutoComplete()">
-          <ul id="search-autocomplete-results"
-              class="dropdown-menu w-100"
-              :class="{ 'show': showDropdown }"
-              aria-labelledby="search-field">
-            <li class="autocomplete-result container" v-for="result in renderedResultsList"
-              :key="result.prefLabel" >
-              <template v-if="result.pageUrl">
-                <a :href=result.pageUrl>
-                  <div class="row pb-1">
-                    <div class="col" v-if="result.hitType == 'hidden'">
-                      <span class="result">
-                        <template v-if="result.showNotation && result.notation">
-                          {{ result.notation }}&nbsp;
-                        </template>
-                        <template v-if="result.hit.hasOwnProperty('match')">
-                          {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
-                        </template>
-                        <template v-else>
-                          {{ result.hit }}
-                        </template>
-                      </span>
-                    </div>
-                    <div class="col" v-else-if="result.hitType == 'alt'">
-                      <span>
-                        <i>
+            <ul
+              ref="langMenu"
+              id="language-list"
+              class="dropdown-menu"
+              role="radiogroup"
+              aria-labelledby="content-language-label">
+              <li
+                v-for="(value, key, index) in languageStrings"
+                :key="key"
+                role="radio"
+                :aria-checked="selectedLanguage === key"
+                :tabindex="focusedLangIndex === index ? 0 : -1"
+                @click="changeContentLangAndReload(key)"
+                @focus="focusedLangIndex = index"
+                class="dropdown-item">
+                {{ value }}
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="search-field-group">
+          <label for="search-field" class="search-field-label">{{ searchLabel }}</label>
+          <div id="headerbar-search" class="dropdown">
+            <input type="search"
+              ref="searchInputField"
+              class="form-control"
+              id="search-field"
+              autocomplete="off"
+              data-bs-toggle=""
+              v-click-outside="hideAutoComplete"
+              v-model="searchTerm"
+              @input="autoComplete($event)"
+              @keydown="onSearchFieldKeydown"
+              @keyup.enter="gotoSearchPage()"
+              @focus="onSearchFieldFocus()">
+            <ul id="search-autocomplete-results"
+                class="w-100"
+                :class="{ 'show': showAutoCompleteDropdown }"
+                aria-labelledby="search-field"
+                @keydown="onResultsKeydown">
+              <li class="autocomplete-result container" v-for="result in renderedResultsList"
+                :key="result.prefLabel" >
+                <template v-if="result.pageUrl">
+                  <a :href=result.pageUrl>
+                    <div class="row py-1">
+                      <div class="col" v-if="result.hitType == 'hidden'">
+                        <span class="result">
                           <template v-if="result.showNotation && result.notation">
                             {{ result.notation }}&nbsp;
                           </template>
@@ -303,61 +532,84 @@ function startVocabSearchApp () {
                           <template v-else>
                             {{ result.hit }}
                           </template>
-                        </i>
-                      </span>
-                      <span> &rarr;&nbsp;<span class="result">
-                        <template v-if="result.showNotation && result.notation">
-                            {{ result.notation }}&nbsp;
-                          </template>
-                          <template v-if="result.hitPref.hasOwnProperty('match')">
-                            {{ result.hitPref.before }}<b>{{ result.hitPref.match }}</b>{{ result.hitPref.after }}
+                        </span>
+                      </div>
+                      <div class="col" v-else-if="result.hitType == 'alt'">
+                        <span>
+                          <i>
+                            <template v-if="result.showNotation && result.notation">
+                              {{ result.notation }}&nbsp;
+                            </template>
+                            <template v-if="result.hit.hasOwnProperty('match')">
+                              {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
+                            </template>
+                            <template v-else>
+                              {{ result.hit }}
+                            </template>
+                          </i>
+                        </span>
+                        <span> &rarr;&nbsp;<span class="result">
+                          <template v-if="result.showNotation && result.notation">
+                              {{ result.notation }}&nbsp;
+                            </template>
+                            <template v-if="result.hitPref.hasOwnProperty('match')">
+                              {{ result.hitPref.before }}<b>{{ result.hitPref.match }}</b>{{ result.hitPref.after }}
+                            </template>
+                            <template v-else>
+                              {{ result.hitPref }}
+                            </template>
+                          </span>
+                        </span>
+                      </div>
+                      <div class="col" v-else-if="result.hitType == 'notation'">
+                        <span class="result">
+                          <template v-if="result.hit.hasOwnProperty('match')">
+                            {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
                           </template>
                           <template v-else>
-                            {{ result.hitPref }}
+                            {{ result.hit }}
                           </template>
                         </span>
-                      </span>
+                        <span>
+                          {{ result.prefLabel }}
+                        </span>
+                      </div>
+                      <div class="col" v-else-if="result.hitType == 'pref'">
+                        <span class="result">
+                          <template v-if="result.showNotation && result.notation">
+                            {{ result.notation }}&nbsp;
+                          </template>
+                          <template v-if="result.hit.hasOwnProperty('match')">
+                            {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
+                          </template>
+                          <template v-else>
+                            {{ result.hit }}
+                          </template>
+                        </span>
+                      </div>
+                      <div class="col-auto align-self-end pr-1" v-html="result.renderedType"></div>
                     </div>
-                    <div class="col" v-else-if="result.hitType == 'notation'">
-                      <span class="result">
-                        <template v-if="result.hit.hasOwnProperty('match')">
-                          {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
-                        </template>
-                        <template v-else>
-                          {{ result.hit }}
-                        </template>
-                      </span>
-                      <span>
-                        {{ result.prefLabel }}
-                      </span>
-                    </div>
-                    <div class="col" v-else-if="result.hitType == 'pref'">
-                      <span class="result">
-                        <template v-if="result.showNotation && result.notation">
-                          {{ result.notation }}&nbsp;
-                        </template>
-                        <template v-if="result.hit.hasOwnProperty('match')">
-                          {{ result.hit.before }}<b>{{ result.hit.match }}</b>{{ result.hit.after }}
-                        </template>
-                        <template v-else>
-                          {{ result.hit }}
-                        </template>
-                      </span>
-                    </div>
-                    <div class="col-auto align-self-end pr-1" v-html="result.renderedType"></div>
-                  </div>
-                </a>
-              </template>
-              <template v-else>
-                {{ result.prefLabel }}
-              </template>
-            </li>
-          </ul>
-        </span>
-        <button id="clear-button" class="btn btn-danger" type="clear" v-if="searchTerm" @click="resetSearchTermAndHideDropdown()">
+                  </a>
+                </template>
+                <template v-else>
+                  {{ result.prefLabel }}
+                </template>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+
+
+        <button id="clear-button"
+                class="btn btn-danger"
+                type="clear"
+                :aria-label="clearSearchAriaMessage"
+                v-if="searchTerm"
+                @click="resetSearchTermAndHideDropdown()">
           <i class="fa-solid fa-xmark"></i>
         </button>
-        <button id="search-button" class="btn btn-outline-secondary" :aria-label="searchAriaMessage" @click="gotoSearchPage()">
+        <button id="search-button" class="btn btn-outline-secondary" :aria-label="searchButtonAriaMessage" @click="gotoSearchPage()">
           <i class="fa-solid fa-magnifying-glass"></i>
         </button>
       </div>

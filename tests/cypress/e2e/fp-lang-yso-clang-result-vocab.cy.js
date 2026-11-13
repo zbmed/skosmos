@@ -15,7 +15,7 @@ describe('Front page -> lang -> vocab -> cLang -> search -> concept page', () =>
 
     // Open the language drop-down and select "fi" for the search language
     cy.get('#language-selector button').click();
-    cy.contains('#language-list li a', 'Finnish').click();
+    cy.contains('#language-selector li', 'Finnish').click();
 
     // Write a search term "arkeologia" and press enter
     cy.get('#search-field').type('arkeolog').type('{enter}');
@@ -33,6 +33,6 @@ describe('Front page -> lang -> vocab -> cLang -> search -> concept page', () =>
     cy.url().should('include', '/yso/en/page/p14173?clang=fi');
 
     // Confirm that the prefLabel on the page is "kaivaukset"
-    cy.get('h1').should('have.text', 'kaivaukset');
+    cy.get('#concept-preflabel').should('have.text', 'kaivaukset');
   });
 });

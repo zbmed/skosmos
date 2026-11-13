@@ -24,9 +24,10 @@
 <link href="node_modules/bootstrap/dist/css/bootstrap.min.css" media="screen, print" rel="stylesheet" type="text/css">
 <link href="resource/css/fonts.css" media="screen, print" rel="stylesheet" type="text/css">
 <link href="resource/css/skosmos.css" media="screen, print" rel="stylesheet" type="text/css">
-<link href="resource/fontawesome/css/fontawesome.css" rel="stylesheet">
-<link href="resource/fontawesome/css/solid.css" rel="stylesheet">
-<link href="resource/fontawesome/css/regular.css" rel="stylesheet">
+<link href="node_modules/@fortawesome/fontawesome-free/css/fontawesome.min.css" rel="stylesheet">
+<link href="node_modules/@fortawesome/fontawesome-free/css/brands.min.css" rel="stylesheet">
+<link href="node_modules/@fortawesome/fontawesome-free/css/solid.min.css" rel="stylesheet">
+<link href="node_modules/@fortawesome/fontawesome-free/css/regular.min.css" rel="stylesheet">
 {% if GlobalConfig.customCss %}
 <link href="{{ GlobalConfig.customCss }}" media="screen, print" rel="stylesheet" type="text/css">
 {% endif %}
@@ -34,19 +35,20 @@
 {{ include('custom-templates.inc.twig', {slotName: 'html-head'}) -}}
 </head>
 <body class="{% if pageType =='landing' %}frontpage-logo{% else %}{% if pageType == 'concept' or pageType == 'vocab-home' or (request.vocabid != '' and request.page == 'page') %}vocab-{{ request.vocabid }}{% endif %}{% endif %}">
+  <a id="skiptocontent" href="{{ request.langurl }}{% if pageType in ['landing', 'about', 'feedback'] %}#main-container{% else %}#main-content{% endif %}">{{ "Skip to main"|trans }}</a>
   <header>
-    <a class="visually-hidden" id="skiptocontent" href="{{ request.langurl }}#maincontent">Skip to main</a>
     <div id="topbar" class="container-fluid d-flex my-auto py-3 px-4">
       {% if request.vocabid == '' and request.page != 'about' and request.page != 'feedback' %}
+        {% set searchBarExpanded = request.page == 'search' %}
         <div>
-          <button class="fs-6 py-3 collapsed" id="global-search-toggle" data-bs-toggle="collapse" data-bs-target="#global-search-bar" aria-expanded="false" aria-controls="global-search-bar">
+          <button class="fs-6 py-3{% if not searchBarExpanded %} collapsed{% endif %}" id="global-search-toggle" data-bs-toggle="collapse" data-bs-target="#global-search-bar" aria-expanded="{{ searchBarExpanded ? 'true' : 'false' }}" aria-controls="global-search-bar">
               {{ "Search across vocabularies"|trans }}
           </button>
         </div>
       {% else %}
-        <a id="skosmos-logo-top" href="{{ 'home' | global_url(request.lang, request.contentLang, null, request.queryParam('anylang') == 'on') }}">
-          <h2 class="visually-hidden">Skosmos</h2>
-        </a>
+        <a id="skosmos-logo-top" class="service-{{ request.lang }}"
+           href="{{ 'home' | global_url(request.lang, request.contentLang, null, request.queryParam('anylang') == 'on') }}"
+           aria-label="{% if GlobalConfig.serviceName is defined %}{{ GlobalConfig.serviceName }}{% else %}Skosmos{% endif %}"></a>
       {% endif %}
       <ul class="nav nav-pills ms-auto my-auto gx-3 py-3" id="topbar-nav">
         <li class="nav-item">
@@ -64,6 +66,7 @@
                    <i class="fa-solid fa-comment"></i>&nbsp;{{ "Feedback" | trans }}
           </a>
         </li>
+        {{ include('custom-templates.inc.twig', {slotName: 'topbar'}) }}
         {% if languages|length > 1 %}
         {% for langcode, langdata in languages %}
         {% if request.lang != langcode %}
@@ -76,11 +79,11 @@
       </ul>
     </div>
     {% if request.vocabid == '' and request.page != 'about' and request.page != 'feedback' %}
-    <div class="collapse container-fluid mt-2 pe-0 py-3" id="global-search-bar">
+    <div class="collapse container-fluid mt-2 pe-0 py-3{% if request.page == 'search' %} show{% endif %}" id="global-search-bar">
       <div class="row">
         <div class="d-flex flex-column flex-xl-row align-items-start align-items-xl-center my-auto">
           <div id="global-search-text">
-            <h2>{{ "Search across vocabularies"|trans }}</h2>
+            {% if pageType == 'global-search' %}<h1>{% endif %}{{ "Search across vocabularies"|trans }}{% if pageType == 'global-search' %}</h1>{% endif %}
           </div>
           <div class="ms-0 ms-xl-auto pt-3 pt-xl-0" id="global-search-wrapper"></div>
         </div>
@@ -89,26 +92,30 @@
     {% endif %}
     {% if pageType in ['landing', 'vocab-home', 'concept', 'vocab-search'] %}
     <div class="container-fluid py-4" id="headerbar">
-      <div id="headerbar-top-slot" class="row"></div>
+      <div id="headerbar-top-slot" class="row">
+        {{ include('custom-templates.inc.twig', {slotName: 'headerbar-top'}) }}
+      </div>
       <div class="row">
         <div class="d-flex flex-column flex-xl-row align-items-start align-items-xl-center my-auto{% if pageType == 'landing' %} p-0{% endif %}">
           {% if pageType == 'landing' %}
           <div id="skosmos-logo">
-            <h1 class="visually-hidden">Skosmos</h1>
+            <h1 class="visually-hidden">{{ GlobalConfig.serviceNameLong(request.lang) }}</h1>
           </div>
           {% else %}
-          <h2 class="fw-bold" id="vocab-title">
+          <h1 class="fw-bold" id="vocab-title">
             <a class="text-decoration-none" href="{{ 'home' | global_url(request.lang, request.contentLang, request.vocabid, request.queryParam('anylang') == 'on') }}">
               {{ request.vocab.title(request.contentLang) }}
             </a>
-          </h2>
+          </h1>
           <div class="ms-0 ms-xl-auto pt-3 pt-xl-0">
             <div id="search-vocab"></div>
           </div>
           {% endif %}
         </div>
       </div>
-      <div id="headerbar-bottom-slot" class="row"></div>
+      <div id="headerbar-bottom-slot" class="row">
+        {{ include('custom-templates.inc.twig', {slotName: 'headerbar-bottom'}) }}
+      </div>
     </div>
     
     {% endif %}
@@ -124,7 +131,7 @@
       </div>
     </div>
   </main>
-  <footer class="py-5">
+  <footer>
   {{ include('custom-templates.inc.twig', {slotName: 'footer'}) }}
   </footer>
   {% include "scripts.inc.twig" %}

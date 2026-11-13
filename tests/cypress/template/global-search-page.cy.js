@@ -25,13 +25,29 @@ describe('Global search page', () => {
     cy.get('link[rel="canonical"]').should('have.attr', 'href', expectedUrl);
     cy.get('head meta[property="og:url"]').should('have.attr', 'content', expectedUrl);
   })
+  it('Search bar is visible by default and the search field contains the search query', () => {
+      cy.visit(`/en/search?clang=en&q=${term}`)
+
+      // The search bar should be expanded on the search results page
+      cy.get('#global-search-bar').should('have.class', 'show')
+      cy.get('#global-search-toggle').should('not.have.class', 'collapsed').and('have.attr', 'aria-expanded', 'true')
+
+      // The search field should be pre-filled with the query from the URL
+      cy.get('#search-field').should('have.value', term)
+  })
+  it('Search bar is hidden by default on the landing page', () => {
+      cy.visit('/en/')
+
+      cy.get('#global-search-bar').should('not.have.class', 'show')
+      cy.get('#global-search-toggle').should('have.class', 'collapsed').and('have.attr', 'aria-expanded', 'false')
+  })
   it('Contains correct amount of search results ', () => {
       const count = 1;
       const searchCountTitle = `${count} results for '${term}'`;
       cy.visit(`/en/search?clang=en&q=${term}`)
 
       //Check that the search count is correct
-      cy.get('#search-results > h1').invoke('text').should('contain', searchCountTitle);
+      cy.get('#search-results > h2').invoke('text').should('contain', searchCountTitle);
 
       //Check that search count matches the number of results
       cy.get('div.search-result').should('have.length', count)
@@ -40,7 +56,7 @@ describe('Global search page', () => {
       cy.visit(`/en/search?clang=en&q=${term}`)
 
       //Check that there is a search result that contains a type icon
-      cy.get('div.search-result > ul > li > span > i.property-hover.fa-solid.fa-arrows-to-circle')
+      cy.get('div.search-result > ul > li > span > i.property-hover.fa-solid.fa-diamond')
 
       //Check that there is correct amount of different properties for the search result
       cy.get('div.search-result > ul > li').should('have.length', 3)
@@ -57,6 +73,13 @@ describe('Global search page', () => {
     cy.visit(`/en/search?clang=en&q=g&vocabs=yso`)
     // Check that there are 5 search results
     cy.get('#search-results').find('.search-result').should('have.length', 5)
+    // The scroll handler attaches via onTranslationReady(), which runs after the
+    // async translation fetch resolves. Wait for translations to be ready first so
+    // the listener is attached before we scroll; otherwise scrollTo happens with no
+    // listener present and never dispatches a 'scroll' event, so no request fires.
+    cy.window().then(win => new Promise(resolve => {
+      win.onTranslationReady(() => resolve())
+    }))
     // Scroll to bottom of page
     cy.scrollTo('bottom')
     // Check that there are 9 search results
