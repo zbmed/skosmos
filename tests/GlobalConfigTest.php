@@ -44,6 +44,16 @@ class GlobalConfigTest extends PHPUnit\Framework\TestCase
         $this->assertEquals(10, $this->config->getSparqlTimeout());
     }
 
+    public function testGetChangeListCutoffDays()
+    {
+        $this->assertEquals(0, $this->config->getChangeListCutoffDays());
+    }
+
+    public function testGetChangeListCutoffDaysDefault()
+    {
+        $this->assertEquals(365, $this->configWithDefaults->getChangeListCutoffDays());
+    }
+
     public function testGetHttpTimeout()
     {
         $this->assertEquals(20, $this->config->getHttpTimeout());
@@ -106,7 +116,7 @@ class GlobalConfigTest extends PHPUnit\Framework\TestCase
 
     public function testGetLanguages()
     {
-        $this->assertEquals(array('en' => 'en_GB.utf8', 'fi' => 'fi_FI.utf8', 'fr' => 'fr_FR.utf8', 'sv' => 'sv_SE.utf8'), $this->config->getLanguages());
+        $this->assertEquals(array('en' => 'en-GB', 'fi' => 'fi-FI', 'fr' => 'fr-FR', 'sv' => 'sv-SE'), $this->config->getLanguages());
     }
 
     public function testGetSearchResultsSize()
@@ -206,7 +216,7 @@ class GlobalConfigTest extends PHPUnit\Framework\TestCase
 
     public function testsGetDefaultLanguages()
     {
-        $this->assertEquals(['en' => 'en_GB.utf8'], $this->configWithDefaults->getLanguages());
+        $this->assertEquals(['en' => 'en-GB'], $this->configWithDefaults->getLanguages());
     }
 
     public function testGetDefaultHttpTimeout()

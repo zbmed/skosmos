@@ -12,9 +12,6 @@ class VocabularyConfigTest extends PHPUnit\Framework\TestCase
      */
     protected function setUp(): void
     {
-        putenv("LANGUAGE=en_GB.utf8");
-        putenv("LC_ALL=en_GB.utf8");
-        setlocale(LC_ALL, 'en_GB.utf8');
         $this->model = new Model();
         $this->assertNotNull($this->model->getVocabulary('test')->getConfig()->getPluginRegister(), "The PluginRegister of the model was not initialized!");
     }
@@ -416,6 +413,24 @@ class VocabularyConfigTest extends PHPUnit\Framework\TestCase
     }
 
     /**
+     * @covers VocabularyConfig::getChangeListCutoffDays
+     */
+    public function testGetChangeListCutoffDaysNotSet()
+    {
+        $vocab = $this->model->getVocabulary('changes');
+        $this->assertNull($vocab->getConfig()->getChangeListCutoffDays());
+    }
+
+    /**
+     * @covers VocabularyConfig::getChangeListCutoffDays
+     */
+    public function testGetChangeListCutoffDaysSet()
+    {
+        $vocab = $this->model->getVocabulary('changesCutoff');
+        $this->assertEquals(30, $vocab->getConfig()->getChangeListCutoffDays());
+    }
+
+    /**
      * @covers VocabularyConfig::getSortByNotation
      * @covers VocabularyConfig::getBoolean
      */
@@ -755,7 +770,11 @@ class VocabularyConfigTest extends PHPUnit\Framework\TestCase
                                     'description' => array( 'en' => 'Class Number') ),
           'skos:exactMatch' => array( 'label' => array( 'fi' => 'vastaava luokka', 'sv' => 'motsvarande klasser', 'en' => 'exactly matching classes' ),
                                       'description' => array( 'en' => 'exactly matching classes in another vocabulary.' ) ),
-        );
+          'unknown:vocabularyProperty' => array( 'label' => array( 'en' => 'Vocabulary Property' ),
+                                                 'description' => array( 'en' => 'Vocabulary Property description' ) ),
+          'skosmos:foreignLabels' => array( 'label' => array( 'en' => 'Foreign terms' ),
+                                            'description' => array( 'en' => 'Terms of this concept in other languages.' ) )
+         );
         $this->assertEquals($expected, $overrides);
     }
 

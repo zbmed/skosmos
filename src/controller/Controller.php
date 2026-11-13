@@ -34,7 +34,7 @@ class Controller
         $this->languages = array();
         foreach ($this->model->getConfig()->getLanguages() as $langcode => $locale) {
             $this->languages[$langcode] = array('locale' => $locale);
-            $this->model->setLocale($langcode);
+            $this->model->setLang($langcode);
             $this->languages[$langcode]['name'] = $this->model->getText('in_this_language');
             $this->languages[$langcode]['lemma'] = Punic\Language::getName($langcode, $langcode);
         }
@@ -176,7 +176,7 @@ class Controller
     protected function executeGitModifiedDateCommand($gitCommand)
     {
         $commitDate = null;
-        $commandOutput = @exec($gitCommand);
+        $commandOutput = @exec($gitCommand . ' 2>/dev/null');
         if ($commandOutput) {
             $commitDate = new \DateTime(trim($commandOutput));
             $commitDate->setTimezone(new \DateTimeZone('UTC'));

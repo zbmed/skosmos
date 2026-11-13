@@ -187,7 +187,7 @@ class WebController extends Controller
      */
     public function invokeLandingPage($request)
     {
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         // load template
         $template = $this->twig->load('landing.twig');
         // set template variables
@@ -220,7 +220,7 @@ class WebController extends Controller
     public function invokeVocabularyConcept(Request $request)
     {
         $lang = $request->getLang();
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocab = $request->getVocab();
 
         $langcodes = $vocab->getConfig()->getShowLangCodes();
@@ -266,7 +266,7 @@ class WebController extends Controller
     public function invokeFeedbackForm($request)
     {
         $template = $this->twig->load('feedback.twig');
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocabList = $this->model->getVocabularyList(false);
         $vocab = $request->getVocab();
 
@@ -374,7 +374,7 @@ class WebController extends Controller
     public function invokeAboutPage($request)
     {
         $template = $this->twig->load('about.twig');
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $url = $request->getServerConstant('HTTP_HOST');
 
         echo $template->render(
@@ -393,7 +393,7 @@ class WebController extends Controller
     {
         $lang = $request->getLang();
         $template = $this->twig->load('global-search.twig');
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
 
         $parameters = new ConceptSearchParameters($request, $this->model->getConfig());
 
@@ -451,6 +451,7 @@ class WebController extends Controller
                 'term' => $request->getQueryParamRaw('q'),
                 'lang_list' => $langList,
                 'vocabs' => isset($vocabs) ? str_replace(' ', '+', $vocabs) : null,
+                'search_vocabs' => $vocabObjects,
                 'vocab_list' => $vocabList,
                 'sorted_vocabs' => $sortedVocabs,
                 'request' => $request,
@@ -466,7 +467,7 @@ class WebController extends Controller
     public function invokeVocabularySearch($request)
     {
         $template = $this->twig->load('vocab-search.twig');
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocab = $request->getVocab();
         $searchResults = null;
         try {
@@ -541,7 +542,7 @@ class WebController extends Controller
     public function invokeVocabularyHome($request)
     {
         $lang = $request->getLang();
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocab = $request->getVocab();
 
         $defaultView = $vocab->getConfig()->getDefaultSidebarView();
@@ -552,6 +553,8 @@ class WebController extends Controller
 
         $vocabTypes = $this->model->getTypes($request->getVocabid(), $request->getLang());
 
+        $customLabels = $vocab->getConfig()->getPropertyLabelOverrides();
+
         echo $template->render(
             array(
                 'languages' => $this->languages,
@@ -561,7 +564,8 @@ class WebController extends Controller
                 'active_tab' => $defaultView,
                 'request' => $request,
                 'types' => $vocabTypes,
-                'plugin_params' => $pluginParameters
+                'plugin_params' => $pluginParameters,
+                'custom_labels' => $customLabels
             )
         );
     }
@@ -571,7 +575,7 @@ class WebController extends Controller
      */
     public function invokeGenericErrorPage($request, $message = null)
     {
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         header("HTTP/1.0 404 Not Found");
         $template = $this->twig->load('error.twig');
         echo $template->render(

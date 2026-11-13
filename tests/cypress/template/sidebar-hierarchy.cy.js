@@ -61,11 +61,11 @@ describe('Hierarchy', () => {
     // Go to test vocab home page
     cy.visit('/test-hierarchy/en/')
     // Change letter to C in alphabetical view
-    cy.get("#tab-alphabetical .pagination").contains('a', 'C').click()
+    cy.get("#tab-alphabetical .letters").contains('.form-check-label', 'C').click()
     // Click on "Cuckoo" in alphabetical index
     cy.get('#tab-alphabetical .sidebar-list li a').last().click()
     // Check that new concept page has been loaded
-    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'Cuckoo')
+    cy.get('#concept-heading h2', {'timeout': 15000}).invoke('text').should('equal', 'Cuckoo')
     // Click hierarchy tab open
     cy.get('#hierarchy').click()
     // Check that selected element is "Cuckoo"
@@ -83,11 +83,11 @@ describe('Hierarchy', () => {
     // Check that hierarchy tab is disabled
     cy.get('#hierarchy .nav-link').should('have.class', 'disabled')
     // Change letter to C in alphabetical view
-    cy.get("#tab-alphabetical .pagination").contains('a', 'C').click()
+    cy.get("#tab-alphabetical .letters").contains('.form-check-label', 'C').click()
     // Click on "Cuckoo" in alphabetical index
     cy.get('#tab-alphabetical .sidebar-list li a').last().click()
     // Check that new concept page has been loaded
-    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'Cuckoo')
+    cy.get('#concept-heading h2', {'timeout': 20000}).invoke('text').should('equal', 'Cuckoo')
     // Check that hierarchy tab is not disabled
     cy.get('#hierarchy .nav-link').should('not.have.class', 'disabled')
     // Click hierarchy tab open
@@ -118,7 +118,7 @@ describe('Hierarchy', () => {
     cy.get('#alphabetical').click()
     cy.get('#tab-alphabetical .sidebar-list li a').first().click()
     // Check that new concept page has been loaded
-    cy.get('#concept-heading h1', {'timeout': 15000}).invoke('text').should('equal', 'concept 1')
+    cy.get('#concept-heading h2', {'timeout': 15000}).invoke('text').should('equal', 'concept 1')
     // Click hierarchy tab open again
     cy.get('#hierarchy').click()
     // Check that "concept 1" is selected
@@ -171,15 +171,70 @@ describe('Hierarchy', () => {
   it('Aria tags are correct for each language', () => {
     cy.visit('/test-hierarchy/fi/')
     cy.get('#hierarchy').should('not.have.class', 'disabled').click()
-    cy.get('#hierarchy-list').find('ul.list-group button').should('have.attr', 'aria-label', 'Avaa');
-    cy.get('.concept-label a').first().should('have.attr', 'aria-label', 'Mene käsitesivulle')
+    cy.get('.concept-label a span').eq(0).invoke('text').should('contain', 'Mene käsitesivulle')
     cy.visit('/test-hierarchy/en/')
     cy.get('#hierarchy').should('not.have.class', 'disabled').click()
-    cy.get('#hierarchy-list').find('ul.list-group button').should('have.attr', 'aria-label', 'Open');
-    cy.get('.concept-label a').first().should('have.attr', 'aria-label', 'Go to the concept page')
+    cy.get('.concept-label a span').eq(0).invoke('text').should('contain', 'Go to the concept page')
     cy.visit('/test-hierarchy/sv/')
     cy.get('#hierarchy').should('not.have.class', 'disabled').click()
-    cy.get('#hierarchy-list').find('ul.list-group button').should('have.attr', 'aria-label', 'Öppna');
-    cy.get('.concept-label a').first().should('have.attr', 'aria-label', 'Gå till begreppssidan')
+    cy.get('.concept-label a span').eq(0).invoke('text').should('contain', 'Gå till begreppssidan')
+  })
+  it('Keyboard navigation', () => {
+    // Go to test vocab home page
+    cy.visit('/test-hierarchy/en/')
+    // Click on hierarchy tab and wait for the concept tree to load
+    cy.get('#hierarchy').click()
+    cy.get('#hierarchy-list .list-group-item a')
+    // Press tab key and check that first list item has focus
+    cy.press(Cypress.Keyboard.Keys.TAB)
+    cy.get('#hierarchy-list .list-group-item').eq(0)
+    .should('have.focus')
+      .and('have.attr', 'role', 'treeitem')
+      .and('have.attr', 'aria-expanded', 'false')
+    cy.get('#hierarchy-list .list-group-item a').eq(0)
+      .and('not.have.attr', 'role', 'treeitem')
+      .and('not.have.attr', 'aria-expanded')
+    // Press right arrow key and check that children are loaded
+    cy.press(Cypress.Keyboard.Keys.RIGHT)
+    cy.get('#hierarchy-list li ul').first().children().should('have.length', 9)
+    cy.get('#hierarchy-list .list-group-item').eq(0).should('have.attr', 'aria-expanded', 'true')
+    // Press right arrow key and check that focus is moved to first child
+    cy.press(Cypress.Keyboard.Keys.RIGHT)
+    cy.get('#hierarchy-list .list-group-item').eq(1).should('have.focus')
+    // Press right arrow key again and check that nothing happens
+    cy.press(Cypress.Keyboard.Keys.RIGHT)
+    cy.get('#hierarchy-list .list-group-item').eq(1).should('have.focus')
+    // Press down arrow key and check that focus is moved
+    cy.press(Cypress.Keyboard.Keys.DOWN)
+    cy.get('#hierarchy-list .list-group-item').eq(2).should('have.focus')
+    // Press down up key and check that focus is moved
+    cy.press(Cypress.Keyboard.Keys.UP)
+    cy.get('#hierarchy-list .list-group-item').eq(1).should('have.focus')
+    // Press left arrow key and check that children are closed and focus is moved
+    cy.press(Cypress.Keyboard.Keys.LEFT)
+    cy.get('#hierarchy-list .list-group-item').eq(0).find('ul').should('not.exist')
+    cy.get('#hierarchy-list .list-group-item').eq(0).should('have.focus').and('have.attr', 'aria-expanded', 'false')
+    // Check that pressing space opens concept page
+    cy.press(Cypress.Keyboard.Keys.SPACE)
+    cy.get('#concept-heading h2', {'timeout': 15000}).invoke('text').should('equal', 'Birds')
+  })
+  it('Disables and enables the hierarchy tab correctly when opening group and concept pages', () => {
+    // Go to test vocab home page
+    cy.visit('/yso/en/')
+    // Check that hierarchy tab is available and no tooltip is available
+    cy.get('#hierarchy').should('not.have.class', 'disabled')
+    cy.get('#hierarchy').should('not.have.attr', 'data-title')
+    // Open groups tab
+    cy.get('#groups').click()
+    // Click first group link
+    cy.get('#groups-list li a').eq(0).click()
+    // Check that hierarchy tab is disabled and tooltip is available
+    cy.get('#hierarchy').should('have.class', 'disabled')
+    cy.get('#hierarchy').should('have.attr', 'data-title', 'Hierarchy can\'t be shown on this page')
+    // Click first concept link
+    cy.get('#groups-list li a').eq(1).click()
+    // Check that hierarchy tab is not disabled and no tooltip is available
+    cy.get('#hierarchy').should('not.have.class', 'disabled')
+    cy.get('#hierarchy').should('not.have.attr', 'data-title')
   })
 })

@@ -64,7 +64,7 @@ class RestController extends Controller
             return $this->returnError(400, "Bad Request", "lang parameter missing");
         }
 
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
 
         $vocabs = array();
         foreach ($this->model->getVocabularies() as $voc) {
@@ -259,7 +259,7 @@ class RestController extends Controller
         if ($this->notModified($request->getVocab())) {
             return null;
         }
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $arrayClass = $request->getVocab()->getConfig()->getArrayClassURI();
         $groupClass = $request->getVocab()->getConfig()->getGroupClassURI();
         $queryLang = $request->getQueryParam('lang') ?? $request->getLang();
@@ -338,7 +338,7 @@ class RestController extends Controller
             return null;
         }
         $lang = $request->getLang();
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocabStats = $request->getVocab()->getLabelStatistics();
 
         /* encode the results in a JSON-LD compatible array */
@@ -398,7 +398,7 @@ class RestController extends Controller
             return null;
         }
 
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
 
         $queriedtypes = $this->model->getTypes($vocid, $request->getLang());
 
@@ -687,7 +687,7 @@ class RestController extends Controller
      */
     public function mappings(Request $request)
     {
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $vocab = $request->getVocab();
         if ($this->notModified($vocab)) {
             return null;
@@ -773,7 +773,7 @@ class RestController extends Controller
 
     public function indexLetters($request)
     {
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
         $letters = $request->getVocab()->getAlphabet($request->getLang());
 
         $ret = array_merge_recursive(
@@ -801,7 +801,7 @@ class RestController extends Controller
 
     public function indexConcepts($letter, $request)
     {
-        $this->model->setLocale($request->getLang());
+        $this->model->setLang($request->getLang());
 
         $offset_param = $request->getQueryParam('offset');
         $offset = (is_numeric($offset_param) && $offset_param >= 0) ? $offset_param : 0;
@@ -1153,7 +1153,8 @@ class RestController extends Controller
                 $concept = array(
                     'uri' => $conceptInfo['uri'],
                     'prefLabel' => $conceptInfo['prefLabel'],
-                    'date' => $conceptInfo['date']->format("Y-m-d\TH:i:sO") );
+                    'date' => $conceptInfo['date']->format("Y-m-d\TH:i:sO"),
+                    'deprecated' => $conceptInfo['deprecated'] );
                 if (array_key_exists('replacedBy', $conceptInfo)) {
                     $concept['replacedBy'] = $conceptInfo['replacedBy'];
                     if (array_key_exists('replacingLabel', $conceptInfo)) {
@@ -1166,10 +1167,12 @@ class RestController extends Controller
         return $this->returnJson(array_merge_recursive(
             $this->context,
             array('@context' => array( '@language' => $request->getLang(),
-                                                                                     'prefLabel' => 'skos:prefLabel',
-                                                                                     'xsd' => 'http://www.w3.org/2001/XMLSchema#',
-                                                                                     'date' => array( '@id' => 'http://purl.org/dc/terms/date', '@type' => 'http://www.w3.org/2001/XMLSchema#dateTime') )
-                                                        ),
+                                       'prefLabel' => 'skos:prefLabel',
+                                       'xsd' => 'http://www.w3.org/2001/XMLSchema#',
+                                       'date' => array( '@id' => 'http://purl.org/dc/terms/date', '@type' => 'http://www.w3.org/2001/XMLSchema#dateTime'),
+                                       'deprecated' => array( '@id' => 'http://www.w3.org/2002/07/owl#deprecated', '@type' => 'http://www.w3.org/2001/XMLSchema#boolean')
+                                )
+            ),
             array('changeList' => $simpleChangeList)
         ));
 

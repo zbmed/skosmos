@@ -30,7 +30,6 @@ const conceptMappingsApp = Vue.createApp({
         clang: window.SKOSMOS.content_lang
       })
       const url = `rest/v1/${window.SKOSMOS.vocab}/mappings?${params}`
-
       fetchWithAbort(url, 'concept')
         .then(data => {
           return data.json()
@@ -94,22 +93,29 @@ conceptMappingsApp.directive('load-concept-page', {
 conceptMappingsApp.component('concept-mappings', {
   props: ['mappings', 'customLabels'],
   inject: ['content_lang'],
+  methods: {
+    labelFor (label, mapping) {
+      const entry = this.customLabels ? this.customLabels[mapping[0].type[0]] : undefined
+      return (entry && entry[0]) || label
+    },
+    titleFor (label, mapping) {
+      const entry = this.customLabels ? this.customLabels[mapping[0].type[0]] : undefined
+      return (entry && entry[1]) || mapping[0].description
+    }
+  },
   template: `
     <div class="row property prop-mapping" v-for="(mapping, label) in mappings">
-      <template v-if="customLabels">
-        <div class="col-lg-4 ps-0 property-label" :title="customLabels[mapping[0].type[0]][1] || mapping[0].description">
-          <h2>{{ customLabels[mapping[0].type[0]][0] }}</h2>
-        </div>
-      </template>
-      <template v-else>
-        <div class="col-lg-4 ps-0 property-label" :title="mapping[0].description"><h2>{{ label }}</h2></div>
-      </template>
-      <div class="col-lg-8 gx-0 gx-lg-4">
+      <div class="col-lg-4 ps-0 property-label" :title="titleFor(label, mapping)">
+        <h3>{{ labelFor(label, mapping) }}</h3>
+      </div>
+      <div class="col-lg-8 gx-0 gx-lg-4 property-value">
         <div class="row mb-2" v-for="m in mapping">
-          <div class="col-5 prop-mapping-label">
-            <a :href="m.hrefLink">{{ m.prefLabel }}</a><span v-if="m.lang && m.lang !== this.content_lang"> ({{ m.lang }})</span>
+          <div class="col-sm-5 prop-mapping-label">
+            <span v-if="m.notation" class="prop-mapping-notation">{{ m.notation }}</span>
+            <a :href="m.hrefLink">{{ m.prefLabel }}</a>
+            <span v-if="m.lang && m.lang !== this.content_lang"> ({{ m.lang }})</span>
           </div>
-          <div class="col-7 prop-mapping-vocab">{{ m.vocabName }}</div>
+          <div class="col-sm-7 prop-mapping-vocab">{{ m.vocabName }}</div>
         </div>
       </div>
     </div>

@@ -49,6 +49,29 @@ describe('Concept page', () => {
     cy.get("#concept-deprecated-alert ul li a").first().should('have.attr', 'href', "changes/en/page/d3");
     cy.get("#main-content .main-content-section.concept-deprecated").should('exist')
   })
+  it("displays the external vocabulary name in parentheses for deprecated replacement links to another vocabulary", () => {
+    // Go to the deprecated concept page whose replacement is in the YSO vocabulary
+    cy.visit('/mapping/en/page/m4')
+
+    // the deprecated alert should be shown
+    cy.get("#concept-deprecated-alert").should('exist')
+
+    // there should be exactly one replacement link
+    cy.get("#concept-deprecated-alert ul").find('li').should('have.length', 1)
+
+    // the replacement link should show the label of the external concept followed
+    // by the external vocabulary's short name in parentheses (the li has template
+    // whitespace between the link and the specifier, so match with a regex)
+    cy.get("#concept-deprecated-alert ul li").invoke('text').then((text) => {
+      expect(text).to.match(/archaeologists\s+\(YSO\)/)
+    })
+
+    // the specifier must not be part of the link text itself
+    cy.get("#concept-deprecated-alert ul li a").invoke('text').should('equal', 'archaeologists')
+
+    // the link should point to the concept page of the external vocabulary
+    cy.get("#concept-deprecated-alert ul li a").should('have.attr', 'href', 'yso/en/page/p10849')
+  })
   it("doesn't contain breadcrumbs for top concepts", () => {
     cy.visit('/yso/en/page/p4762') // go to "objects" concept page
 
@@ -136,19 +159,42 @@ describe('Concept page', () => {
     // check that there are 2 breadcrumb links currently shown
     cy.get('#concept-breadcrumbs ol').find('li.show').should('have.length', 4)
   })
-
-  it('overrides property labels', () => {
+  it('capitalizes property labels', () => {
+    // Go to "Test concept" concept page in prefix vocab which uses a custom property
+    cy.visit('/prefix/en/page/p1')
+    // Check that "my property" property label is capitalized correctly
+    cy.get('.prop-my_property .property-label h3').invoke('text').should('include', 'My property')
+  })
+  it('uses the custom prefLabel label in the copy-to-clipboard button accessible name', () => {
+    // Go to "Crucian carp" concept page in vocab with property label overrides
+    // (no notation, so the copy button next to the prefLabel is shown)
+    cy.visit('/conceptPropertyLabels/en/page/ta121')
+    // The custom label "Caption" (override of "Preferred term") should be used in the accessible name
+    cy.get('#copy-preflabel').should('have.attr', 'aria-label', 'Copy Caption to clipboard')
+    // and in the tooltip title
+    cy.get('#copy-preflabel').should('have.attr', 'title', 'Copy Caption to clipboard')
+  })
+  it('overrides concept property labels', () => {
     // Go to "Carp" concept page in vocab with property label overrides
     cy.visit('/conceptPropertyLabels/en/page/ta112')
+    // Check that the foreign prefLabels section label and tooltip are overridden
+    cy.get('.prop-foreignlabels .property-label h3').invoke('text').should('equal', 'Foreign terms')
+    cy.get('.prop-foreignlabels .property-label h3').invoke('attr', 'data-title').should('equal', 'Terms of this concept in other languages.')
+    cy.get('#prop-desc-foreignlabels').invoke('text').should('equal', 'Terms of this concept in other languages.')
     // Check that prefLabel property label is overridden correctly
     cy.get('#concept-property-label').invoke('text').should('include', 'Caption')
     // Check that notation property label is overridden correctly
-    cy.get('.prop-skos_notation .property-label h2').invoke('text').should('include', 'UDC number')
-    // Check that mapping property name is overridden correctly
+    cy.get('.prop-skos_notation .property-label h3').invoke('text').should('include', 'UDC number')
+    // Mapping property WITH a label override shows the overridden label and tooltip
     // NOTE: we need to increase the timeout as the mappings can take a long time to load
-    cy.get('.prop-mapping h2', {'timeout': 20000}).eq(0).invoke('text').should('contain', 'Exactly matching classes')
-    // Check that mapping property title is overridden correctly
-    cy.get('.prop-mapping .property-label').eq(0).should('have.attr', 'title').and('contain', 'Exactly matching classes in another vocabulary.')
+    cy.get('.prop-mapping .property-label h3', {'timeout': 20000})
+      .contains('Exactly matching classes')
+      .parents('.property-label')
+      .should('have.attr', 'title', 'Exactly matching classes in another vocabulary.')
+    // Mapping property WITHOUT a label override falls back to the default label
+    // and description
+    cy.get('.prop-mapping .property-label[title="Closely matching concepts in another vocabulary."]')
+      .find('h3').should('contain.text', 'Closely matching concepts')
   })
   it('contains SKOS XL information for concept prefLabel', () => {
     cy.visit('/yso/en/page/p4625?clang=se') // go to "bronsaáigi" concept page ('Bronze Age' in Northern Sami)
@@ -162,11 +208,20 @@ describe('Concept page', () => {
     // the tooltip should now be visible
     cy.get('#concept-label .tooltip-html-content').should('be.visible')
   })
+  it('contains aria-describedby information for property label', () => {
+    cy.visit('/groups/en/page/fish') // go to "Fish" ConceptGroup page
+
+    // check the linking from property name to aria description
+    cy.get('.prop-rdf_type .property-label h3').then($el => {
+      const id = $el.attr('aria-describedby')
+      cy.get(`#${id}`).should('contain', 'Type of entity')
+    })
+  })
   it('contains concept type (skos:Collection and iso-thes)', () => {
     cy.visit('/groups/en/page/fish') // go to "Fish" ConceptGroup page
 
     // check the property name
-    cy.get('.prop-rdf_type .property-label').invoke('text').should('equal', 'Type')
+    cy.get('.prop-rdf_type .property-label h3').invoke('text').should('equal', 'Type')
 
     // check the concept type
     cy.get('.prop-rdf_type .property-value li').invoke('text').should('contain', 'Collection')
@@ -176,7 +231,7 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-rdf_type .property-label').invoke('text').should('equal', 'Type')
+    cy.get('.prop-rdf_type .property-label h3').invoke('text').should('equal', 'Type')
 
     // check the concept type
     cy.get('.prop-rdf_type .property-value li').invoke('text').should('equal', 'General concept')
@@ -185,7 +240,7 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685?clang=fi') // go to "music research" concept page (Finnish content language)
 
     // check the property name
-    cy.get('.prop-skos_definition .property-label').invoke('text').should('equal', 'Definition')
+    cy.get('.prop-skos_definition .property-label h3').invoke('text').should('equal', 'Definition')
 
     // check the definition text
     cy.get('.prop-skos_definition .property-value li').invoke('text').should('contain', 'Musiikin ja musiikin harjoittamisen systemaattinen tutkiminen niiden kaikissa ilmenemismuodoissa.')
@@ -200,7 +255,7 @@ describe('Concept page', () => {
     cy.visit('/test/en/page/ta122') // go to "Black sea bass" concept page
 
     // check the property name
-    cy.get('.prop-skos_definition .property-label').invoke('text').should('equal', 'Definition')
+    cy.get('.prop-skos_definition .property-label h3').invoke('text').should('equal', 'Definition')
 
     // check the definition text
     cy.get('.prop-skos_definition .reified-property-value').invoke('text').should('contain', 'The black sea bass')
@@ -209,7 +264,7 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-skos_broader .property-label').invoke('text').should('equal', 'Broader concept')
+    cy.get('.prop-skos_broader .property-label h3').invoke('text').should('equal', 'Broader concept')
 
     // check the broader concept
     cy.get('.prop-skos_broader .property-value a').invoke('text').should('equal', 'research')
@@ -218,7 +273,7 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-skos_narrower .property-label').invoke('text').should('equal', 'Narrower concepts')
+    cy.get('.prop-skos_narrower .property-label h3').invoke('text').should('equal', 'Narrower concepts')
 
     // check that we have the correct number of narrower concepts
     cy.get('.prop-skos_narrower .property-value').find('li').should('have.length', 8)
@@ -249,16 +304,31 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-skos_related .property-label').invoke('text').should('equal', 'Related concepts')
+    cy.get('.prop-skos_related .property-label h3').invoke('text').should('equal', 'Related concepts')
 
     // check that we have the correct number of related concepts
     cy.get('.prop-skos_related .property-value').find('li').should('have.length', 3)
+  })
+  it('contains external links', () => {
+    cy.visit('/test/en/page/ta126') // go to "Europa" concept page
+
+    // check the property name
+    cy.get('.prop-foaf_homepage .property-label h3').invoke('text').should('equal', 'Homepage')
+
+    // check that we have the correct number of related concepts
+    cy.get('.prop-foaf_homepage .property-value').find('li').should('have.length', 1)
+
+    // check that the link has the correct text (the URL itself)
+    cy.get('.prop-foaf_homepage .property-value a').invoke('text').should('equal', 'https://en.wikipedia.org/wiki/Europe')
+
+    // check that the link has the correct href URL
+    cy.get('.prop-foaf_homepage .property-value a').should('have.attr', 'href', 'https://en.wikipedia.org/wiki/Europe')
   })
   it('contains altLabels (entry terms)', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-skos_altLabel .property-label').invoke('text').should('equal', 'Entry terms')
+    cy.get('.prop-skos_altLabel .property-label h3').invoke('text').should('equal', 'Entry terms')
 
     // check that we have the correct number of altLabels
     cy.get('.prop-skos_altLabel .property-value').find('li').should('have.length', 1)
@@ -288,7 +358,7 @@ describe('Concept page', () => {
     cy.visit('/yso/fi/page/p39138') // go to "ukonvaajat" concept page (in Finnish)
 
     // check the property name
-    cy.get('.prop-skos_scopeNote .property-label').invoke('text').should('equal', 'Käyttöhuomautus')
+    cy.get('.prop-skos_scopeNote .property-label h3').invoke('text').should('equal', 'Käyttöhuomautus')
 
     // check that we have the correct number of scopeNotes
     cy.get('.prop-skos_scopeNote .property-value').find('li').should('have.length', 1)
@@ -303,7 +373,7 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p38289') // go to "music archaeology" concept page
 
     // check the property name
-    cy.get('.prop-skosmos_memberOf .property-label').invoke('text').should('equal', 'Belongs to group')
+    cy.get('.prop-skosmos_memberOf .property-label h3').invoke('text').should('equal', 'Belongs to group')
 
     // check that we have the correct number of groups
     cy.get('.prop-skosmos_memberOf .property-value').find('li').should('have.length', 1)
@@ -322,10 +392,19 @@ describe('Concept page', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page
 
     // check the property name
-    cy.get('.prop-foreignlabels .property-label').invoke('text').should('equal', 'In other languages')
+    cy.get('.prop-foreignlabels .property-label h3').invoke('text').should('equal', 'In other languages')
 
     // check that we have the correct number of languages
     cy.get('#concept-other-languages').find('.row').should('have.length', 3)
+  })
+  it('contains aria-describedby information for terms in other languages', () => {
+    cy.visit('/yso/en/page/p21685') // go to "music research" concept page
+
+    // check the linking from property name to aria description
+    cy.get('.prop-foreignlabels .property-label h3').then($el => {
+      const id = $el.attr('aria-describedby')
+      cy.get(`#${id}`).should('contain', 'Terms for the concept in other languages.')
+    })
   })
   it('contains SKOS XL information for terms in other languages', () => {
     cy.visit('/yso/en/page/p4625') // go to "Bronze Age" concept page
@@ -342,11 +421,132 @@ describe('Concept page', () => {
   it('contains created & modified times (English)', () => {
     cy.visit('/yso/en/page/p21685') // go to "music research" concept page (English)
 
-    cy.get('#date-info').invoke('text').should('equal', 'Created 10/25/07, last modified 2/8/23')
+    cy.get('#date-info').invoke('text').should('equal', 'Created 25/10/2007, last modified 08/02/2023')
   })
   it('contains created & modified times (Finnish)', () => {
     cy.visit('/yso/fi/page/p21685') // go to "musiikintutkimus" concept page (Finnish)
 
     cy.get('#date-info').invoke('text').should('equal', 'Luotu 25.10.2007, viimeksi muokattu 8.2.2023')
+  })
+  it('date format remains in English interface when switching content language', () => {
+    cy.visit('/yso/en/page/p2557')
+
+    const expectedDateInfo = 'Created 01/11/1986, last modified 08/02/2023'
+
+    // Check that date format is in English
+    cy.get('#date-info').invoke('text').should('equal', expectedDateInfo)
+
+    // Get all href attributes from links in the other languages section
+    cy.get('#concept-other-languages a')
+      .then(($links) => {
+        // Extract href attributes into an array
+        const hrefs = [...$links].map(link => link.getAttribute('href'))
+        
+        // Visit each href and check the date format
+        hrefs.forEach((href) => {
+          cy.visit(href)
+          cy.get('#date-info').invoke('text').should('equal', expectedDateInfo)
+        })
+      })
+  })
+  it('date format remains in Finnish interface when switching content language', () => {
+    // Visit the page with Finnish interface
+    cy.visit('/yso/fi/page/p2557')
+
+    const expectedDateInfo = 'Luotu 1.11.1986, viimeksi muokattu 8.2.2023'
+
+    // Check that date format is in Finnish
+    cy.get('#date-info').invoke('text').should('equal', expectedDateInfo)
+
+    // Get all href attributes from links in the other languages section
+    cy.get('#concept-other-languages a')
+      .then(($links) => {
+        // Extract href attributes into an array
+        const hrefs = [...$links].map(link => link.getAttribute('href'))
+        
+        // Visit each href and check the date format
+        hrefs.forEach((href) => {
+          cy.visit(href)
+          cy.get('#date-info').invoke('text').should('equal', expectedDateInfo)
+        })
+      })
+  })
+  it('handles navigating back and forward in browser\'s history', () => {
+    // Go to YSO home page
+    cy.visit('/yso/en/')
+    // Click on the link to "abstract objects" to trigger partial page load
+    cy.get('#tab-alphabetical').contains('a', 'abstract objects').click()
+    // Check that partial page load was successful
+    cy.get('#concept-heading h2', {timeout: 10000}).should('contain', 'abstract objects')
+    // Click on the link to "acid" to trigger partial page load
+    cy.get('#tab-alphabetical').contains('a', 'acids').click()
+    // Check that partial page load was successful
+    cy.get('#concept-heading h2', {timeout: 10000}).should('contain', 'acids')
+    // Trigger browser's back button
+    cy.go('back')
+    // Check that partial page load was successful
+    cy.get('#concept-heading h2', {timeout: 10000}).should('contain', 'abstract objects')
+    // Check that selected concept highlight is removed from alphabetical list
+    cy.get('#tab-alphabetical .sidebar-list .selected').should('not.exist')
+    // Trigger browser's forward button
+    cy.go('forward')
+    // Check that partial page load was successful
+    cy.get('#concept-heading h2', {timeout: 10000}).should('contain', 'acids')
+    // Go back two pages in history
+    cy.go(-2)
+    // Check that vocab home page is loaded
+    cy.get('#vocab-heading', {timeout: 10000}).should('exist')
+  })
+  it('displays the external vocabulary name in parentheses for a related concept in another vocabulary', () => {
+    // Go to "This concept is related to a concept in another vocabulary" concept page in the mapping vocab
+    cy.visit('/mapping/en/page/m3')
+
+    // check the property name
+    cy.get('.prop-skos_related .property-label h3').invoke('text').should('equal', 'Related concepts')
+
+    // check that we have exactly one related concept
+    cy.get('.prop-skos_related .property-value').find('li').should('have.length', 1)
+
+    // the link label should be the external concept's prefLabel followed by the
+    // external vocabulary's short name in parentheses (the li has template whitespace
+    // between the link and the specifier, so match with a regex)
+    cy.get('.prop-skos_related .property-value li').invoke('text').then((text) => {
+      expect(text).to.match(/archaeologists\s+\(YSO\)/)
+    })
+
+    // the specifier must not be part of the link text itself, but follow the link
+    cy.get('.prop-skos_related .property-value li a').invoke('text').should('equal', 'archaeologists')
+  })
+  it('external link label follows the content language while the vocabulary name follows the UI language', () => {
+    // go to the same concept page with the Swedish UI language and Finnish content language
+    cy.visit('/mapping/sv/page/m3?clang=fi')
+
+    // the link label should be the Finnish prefLabel of the external concept (content language),
+    // while the vocabulary specifier should be the Swedish short name of YSO, ALLFO (UI language)
+    cy.get('.prop-skos_related .property-value li').invoke('text').then((text) => {
+      expect(text).to.match(/arkeologit\s+\(ALLFO\)/)
+    })
+  })
+  it('external link points to the concept page of the external vocabulary', () => {
+    cy.visit('/mapping/en/page/m3')
+
+    // the link should use the external vocabulary (yso) in its href, not the current one (mapping)
+    cy.get('.prop-skos_related .property-value li a').should('have.attr', 'href', 'yso/en/page/p10849')
+  })
+  it("does not display a vocabulary name in parentheses for links to the same vocabulary", () => {
+    // go to the "archaeologists" concept page in YSO; its broader concept is also in YSO
+    cy.visit('/yso/en/page/p10849')
+
+    // check the broader concept link
+    cy.get('.prop-skos_broader .property-value a').invoke('text').should('equal', 'occupations (professions)')
+
+    // no concept link on the page should be followed by a parenthesized vocabulary name
+    // (labels themselves may contain parentheses, e.g. "occupations (professions)",
+    // so only the text following the link text is checked)
+    cy.get('#main-content .property-value li a').each(($link) => {
+      const liText = Cypress.$($link).closest('li').text()
+      const textAfterLink = liText.replace(Cypress.$($link).text(), '')
+      expect(textAfterLink.trim()).to.not.match(/\(.*\)/)
+    })
   })
 })

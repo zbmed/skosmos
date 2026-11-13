@@ -10,9 +10,6 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
 
     protected function setUp(): void
     {
-        putenv("LANGUAGE=en_GB.utf8");
-        putenv("LC_ALL=en_GB.utf8");
-        setlocale(LC_ALL, 'en_GB.utf8');
         $this->model = new Model();
         $this->jenamodel = new Model('../../tests/jenatestconfig.ttl');
     }
@@ -225,7 +222,30 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
     {
         $vocab = $this->model->getVocabulary('test');
         $info = $vocab->getInfo();
-        $this->assertEquals(array("dc:title" => array('Test ontology'), 'dc:modified' => array('Wednesday, October 1, 2014 16:29:03'), "rdf:type" => array('http://www.w3.org/2004/02/skos/core#ConceptScheme' => 'http://www.w3.org/2004/02/skos/core#ConceptScheme'), "owl:versionInfo" => array('The latest and greatest version'), "dc:description" => array('Description of Test ontology')), $info);
+
+        /* test different date variants since the details depend on locale data */
+        $this->assertContains(
+            $info['dc:modified'][0],
+            array(
+                'Wednesday 1 October 2014 at 16:29:03 Coordinated Universal Time',
+                'Wednesday, 1 October 2014 at 16:29:03 Coordinated Universal Time',
+            )
+        );
+
+        /* check the remaining data */
+        unset($info['dc:modified']);
+        $this->assertEquals(
+            array(
+                "dc:title" => array('Test ontology'),
+                "rdf:type" => array(
+                    'http://www.w3.org/2004/02/skos/core#ConceptScheme' =>
+                        'http://www.w3.org/2004/02/skos/core#ConceptScheme'
+                ),
+                "owl:versionInfo" => array('The latest and greatest version'),
+                "dc:description" => array('Description of Test ontology')
+            ),
+            $info
+        );
     }
 
     /**
@@ -258,6 +278,54 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
         $vocab = $this->model->getVocabulary('testdiff');
         $info = $vocab->getInfo();
         $this->assertEquals(array("dc11:title" => array('Test ontology 2')), $info);
+    }
+
+    /**
+     * @covers Vocabulary::getInfo
+     * Test that vocabulary dates are displayed in the interface language
+     */
+    public function testGetInfoDateInInterfaceLanguage()
+    {
+        // Test with English interface
+        $this->model->setLang('en');
+        $vocab = $this->model->getVocabulary('test-hierarchy');
+        $info = $vocab->getInfo();
+        
+        // The date should be formatted according to British English locale
+        $this->assertArrayHasKey('dc:modified', $info);
+        $modifiedDate = $info['dc:modified'][0];
+        
+        // Should contain English month/weekday names and time
+        // 2014-10-01T16:29:03+02:00 converted to UTC is 2014-10-01T14:29:03+00:00
+        $this->assertStringContainsString('2014', $modifiedDate);
+        $this->assertStringContainsString('October', $modifiedDate);
+        
+        // Test with French interface
+        $this->model->setLang('fr');
+        $vocab_fr = $this->model->getVocabulary('test-hierarchy');
+        $info_fr = $vocab_fr->getInfo();
+        $modifiedDate_fr = $info_fr['dc:modified'][0];
+        
+        // Should contain French month/weekday names
+        $this->assertStringContainsString('2014', $modifiedDate_fr);
+        $this->assertStringContainsString('octobre', $modifiedDate_fr);
+    }
+
+    /**
+     * @covers Vocabulary::getInfo
+     * Test that vocabulary dates are converted to UTC timezone
+     */
+    public function testGetInfoDateTimezoneConversion()
+    {
+        $this->model->setLang('en');
+        $vocab = $this->model->getVocabulary('test-hierarchy');
+        $info = $vocab->getInfo();
+        
+        // Original date: 2014-10-01T16:29:03 (UTC+2)
+        // Should be converted to: 2014-10-01T14:29:03 UTC
+        $modifiedDate = $info['dc:modified'][0];
+        $this->assertStringContainsString('14:29', $modifiedDate);
+        $this->assertStringContainsString('Coordinated Universal Time', $modifiedDate);
     }
 
     /**
@@ -481,6 +549,26 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * @covers Vocabulary::getChangeList
+     */
+    public function testGetChangeListWithCutoff()
+    {
+        // the changesCutoff vocabulary overrides the global cutoff (0 = disabled)
+        // with a 30 day window, so only the future-dated concepts should be included,
+        // regardless of whether their dates are xsd:date or xsd:dateTime literals
+        $vocab = $this->model->getVocabulary('changesCutoff');
+        $changeList = $vocab->getChangeList('dc:created', 'en', 0, 10);
+        $uris = array();
+        foreach ($changeList as $concept) {
+            $uris[] = $concept['uri'];
+        }
+        $this->assertEquals(
+            array('http://www.skosmos.skos/changesCutoff/c1', 'http://www.skosmos.skos/changesCutoff/c3'),
+            $uris
+        );
+    }
+
+    /**
      * @covers Vocabulary::verifyVocabularyLanguage
      */
     public function testVerifyVocabularyLanguage()
@@ -504,7 +592,7 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
      */
     public function testGetShortNameLang()
     {
-        $this->model->setLocale('fi');
+        $this->model->setLang('fi');
         $vocab = $this->model->getVocabulary('test');
         $this->assertEquals('Testi lyhyt', $vocab->getShortName());
     }
@@ -609,7 +697,7 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
     }
 
     /**
-     * @covers Vocabulary::getModifiedDate
+     * @covers Vocabulary::getModifiedDate without date
      */
     public function testGetModifiedDateNoConceptScheme()
     {
@@ -617,6 +705,21 @@ class VocabularyTest extends \PHPUnit\Framework\TestCase
         $this->assertNull(
             $vocab->getModifiedDate()
         );
+    }
+
+    /**
+     * @covers Vocabulary::getModifiedDate
+     */
+    public function testGetModifiedDateConceptScheme()
+    {
+        $vocab = $this->model->getVocabulary('test-hierarchy');
+        $modifiedDate = $vocab->getModifiedDate();
+        // The dates vocabulary now has a ConceptScheme with a modified date
+        $this->assertInstanceOf(DateTime::class, $modifiedDate);
+        // Returns the date in the original timezone (+00:00)
+        // 2014-10-01T16:29:03+02:00
+        $this->assertEquals('2014-10-01 16:29:03', $modifiedDate->format('Y-m-d H:i:s'));
+        $this->assertEquals('+02:00', $modifiedDate->format('P'));
     }
 
     /**

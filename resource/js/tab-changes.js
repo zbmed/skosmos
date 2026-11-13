@@ -134,7 +134,12 @@ function startChangesApp () {
       }
     },
     template: `
-      <div v-click-tab-changes="handleClickChangesEvent" v-resize-window="setListStyle">
+      <div
+        v-click-tab-changes="handleClickChangesEvent"
+        v-toggle-sidebar="setListStyle"
+        v-resize-window="setListStyle"
+        v-window-popstate="() => selectedConcept = ''"
+      >
         <tab-changes
           :changed-concepts="changedConcepts"
           :selected-concept="selectedConcept"
@@ -156,10 +161,23 @@ function startChangesApp () {
       el.clickTabEvent = event => {
         binding.value() // calling the method given as the attribute value (loadChanges)
       }
-      document.querySelector('#changes').addEventListener('click', el.clickTabEvent) // registering an event listener on clicks on the changes nav-item element
+      document.querySelector('#changes').addEventListener('shown.bs.tab', el.clickTabEvent) // registering an event listener on bootstrap's tab shown event on the changes nav-item element
     },
     unmounted: el => {
-      document.querySelector('#changes').removeEventListener('click', el.clickTabEvent)
+      document.querySelector('#changes').removeEventListener('shown.bs.tab', el.clickTabEvent)
+    }
+  })
+
+  /* Custom directive used to add an event listener on clicks on the sidebar-collapse-btn element on mobile */
+  tabChangesApp.directive('toggle-sidebar', {
+    beforeMount: (el, binding) => {
+      el.clickTabEvent = event => {
+        binding.value() // calling the method given as the attribute value (seListStyle)
+      }
+      document.querySelector('#sidebar-collapse-btn').addEventListener('sidebar-toggled', el.clickTabEvent) // registering an event listener on toggling sidebar on mobile
+    },
+    unmounted: el => {
+      document.querySelector('#sidebar-collapse-btn').addEventListener('sidebar-toggled', el.clickTabEvent)
     }
   })
 
@@ -176,18 +194,86 @@ function startChangesApp () {
     }
   })
 
+  /* Custom directive used to add an event listener on popstate events */
+  tabChangesApp.directive('window-popstate', {
+    beforeMount: (el, binding) => {
+      el.windowPopstateEvent = event => {
+        binding.value() // calling the method given as the attribute value
+      }
+      window.addEventListener('popstate', el.windowPopstateEvent) // registering an event listener on popstate events
+    },
+    unmounted: el => {
+      window.removeEventListener('popstate', el.windowPopstateEvent)
+    }
+  })
+
   tabChangesApp.component('tab-changes', {
     props: ['changedConcepts', 'selectedConcept', 'loadingConcepts', 'loadingMoreConcepts', 'loadingMessage', 'toConceptPageAriaMessage', 'listStyle'],
+    data () {
+      return {
+        conceptInFocus: 0,
+        changedConceptsLength: 0
+      }
+    },
     inject: ['partialPageLoad', 'getConceptURL'],
     emits: ['selectConcept'],
     methods: {
-      loadConcept (event, uri) {
+      loadConcept (event, uri, i) {
+        this.conceptInFocus = i
         partialPageLoad(event, getConceptURL(uri))
         this.$emit('selectConcept', uri)
+      },
+      getIndexedConcepts () {
+        // Give each uri and replacedBy in changedConcepts a unique index for keyboard navigation
+        let counter = 0
+
+        const indexed = new Map(
+          [...this.changedConcepts].map(([month, entries]) => [
+            month,
+            entries.map(entry => {
+              const result = { ...entry, index: counter++ }
+              if (entry.replacedBy) result.replacedByIndex = counter++
+              return result
+            })
+          ])
+        )
+        this.changedConceptsLength = counter
+        return indexed
+      },
+      handleKeydownEvent (e) {
+        if (e.key === ' ') {
+          // Click on link currently in focus
+          e.preventDefault()
+          this.$refs['concept' + this.conceptInFocus][0].click()
+        } else if (e.key === 'ArrowDown') {
+          // On last element move focus to first list item, otherwise next list item
+          e.preventDefault()
+          this.conceptInFocus = (this.conceptInFocus + 1) % this.changedConceptsLength
+          this.$refs['concept' + this.conceptInFocus][0].focus()
+        } else if (e.key === 'ArrowUp') {
+          // On first element move focus to last list item, otherwise to previous list item
+          e.preventDefault()
+          if (this.conceptInFocus === 0) {
+            this.conceptInFocus = this.changedConceptsLength - 1
+          } else {
+            this.conceptInFocus -= 1
+          }
+          this.$refs['concept' + this.conceptInFocus][0].focus()
+        } else if (e.key === 'End') {
+          // Move focus to last list item
+          e.preventDefault()
+          this.conceptInFocus = this.changedConceptsLength - 1
+          this.$refs['concept' + this.conceptInFocus][0].focus()
+        } else if (e.key === 'Home') {
+          // Move focus to first list item
+          e.preventDefault()
+          this.conceptInFocus = 0
+          this.$refs['concept' + this.conceptInFocus][0].focus()
+        }
       }
     },
     template: `
-      <div class="sidebar-list pt-3" :style="listStyle" ref="list">
+      <div class="sidebar-list pt-3" tabindex="-1" :style="listStyle" ref="list">
         <template v-if="loadingConcepts">
           <div>
             {{ loadingMessage }} <i class="fa-solid fa-spinner fa-spin-pulse"></i>
@@ -195,35 +281,46 @@ function startChangesApp () {
         </template>
         <template v-else>
           <ul class="list-group" v-if="changedConcepts.length !== 0">
-            <template v-for="[month, concepts] in changedConcepts">
+            <template v-for="[month, concepts] in getIndexedConcepts()">
               <li class="list-group-item py-1 px-2">
                 <h2 class="pb-1">{{ month }}</h2>
               </li>
               <li v-for="concept in concepts" class="list-group-item py-1 px-2">
-                <template v-if="concept.replacedBy">
+                <template v-if="concept.deprecated">
                   <a :class="{ 'selected': selectedConcept === concept.uri }"
                     :href="getConceptURL(concept.uri)"
-                    @click="loadConcept($event, concept.uri)"
-                    :aria-label="toConceptPageAriaMessage"
+                    :tabindex="concept.index === conceptInFocus ? 0 : -1"
+                    :ref="'concept' + concept.index"
+                    @click="loadConcept($event, concept.uri, concept.index)"
+                    @keydown="handleKeydownEvent($event)"
                   >
                     <s>{{ concept.prefLabel }}</s>
+                    <span class="visually-hidden">{{ toConceptPageAriaMessage }}</span>
                   </a>
-                  <i class="fa-solid fa-arrow-right"></i>
-                  <a :class="{ 'selected': selectedConcept === concept.replacedBy }"
-                    :href="getConceptURL(concept.replacedBy)"
-                    @click="loadConcept($event, concept.replacedBy)"
-                    :aria-label="toConceptPageAriaMessage"
-                  >
-                    {{ concept.replacingLabel }}
-                  </a>
+                  <template v-if="concept.replacedBy">
+                    <i class="fa-solid fa-arrow-right"></i>
+                    <a :class="{ 'selected': selectedConcept === concept.replacedBy }"
+                      :href="getConceptURL(concept.replacedBy)"
+                      :tabindex="concept.replacedByIndex === conceptInFocus ? 0 : -1"
+                      :ref="'concept' + concept.replacedByIndex"
+                      @click="loadConcept($event, concept.replacedBy, concept.replacedByIndex)"
+                      @keydown="handleKeydownEvent($event)"
+                    >
+                      {{ concept.replacingLabel }}
+                      <span class="visually-hidden">{{ toConceptPageAriaMessage }}</span>
+                    </a>
+                  </template>
                 </template>
                 <template v-else>
                   <a :class="{ 'selected': selectedConcept === concept.uri }"
                     :href="getConceptURL(concept.uri)"
-                    @click="loadConcept($event, concept.uri)"
-                    :aria-label="toConceptPageAriaMessage"
+                    :tabindex="concept.index === conceptInFocus ? 0 : -1"
+                    :ref="'concept' + concept.index"
+                    @click="loadConcept($event, concept.uri, concept.index)"
+                    @keydown="handleKeydownEvent($event)"
                   >
                     {{ concept.prefLabel }}
+                    <span class="visually-hidden">{{ toConceptPageAriaMessage }}</span>
                   </a>
                 </template>
               </li>
